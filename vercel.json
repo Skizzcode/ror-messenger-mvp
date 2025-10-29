@@ -1,8 +1,5 @@
 {
   "crons": [
-    {
-      "path": "/api/maintenance/cleanup",
-      "schedule": "0 * * * *"
-    }
+    { "path": "/api/maintenance/cleanup", "schedule": "0 0 * * *" } 
   ]
 }
