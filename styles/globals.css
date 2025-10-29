@@ -1,0 +1,11 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root{ color-scheme: dark; }
+html,body,#__next{ height:100%; }
+body{ @apply bg-bg text-text; }
+.btn{ @apply px-4 py-2 rounded-xl bg-accent text-black font-semibold active:scale-95 transition; }
+.card{ @apply bg-panel/80 backdrop-blur border border-white/10 rounded-2xl; }
+.input{ @apply w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-text placeholder:opacity-50; }

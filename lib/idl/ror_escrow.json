@@ -1,0 +1,51 @@
+{
+  "version": "0.1.0",
+  "name": "ror_escrow",
+  "instructions": [
+    {
+      "name": "initializeThread",
+      "accounts": [
+        {"name":"fan","isMut":true,"isSigner":true},
+        {"name":"creator","isMut":false,"isSigner":false},
+        {"name":"platform","isMut":false,"isSigner":false},
+        {"name":"mint","isMut":false,"isSigner":false},
+        {"name":"threadState","isMut":true,"isSigner":false},
+        {"name":"vaultAta","isMut":true,"isSigner":false},
+        {"name":"fanAta","isMut":true,"isSigner":false},
+        {"name":"tokenProgram","isMut":false,"isSigner":false},
+        {"name":"systemProgram","isMut":false,"isSigner":false},
+        {"name":"associatedTokenProgram","isMut":false,"isSigner":false},
+        {"name":"rent","isMut":false,"isSigner":false}
+      ],
+      "args":[
+        {"name":"amount","type":"u64"},
+        {"name":"deadlineTs","type":"i64"}
+      ]
+    },
+    {
+      "name":"replyAndRelease",
+      "accounts":[
+        {"name":"creator","isMut":false,"isSigner":true},
+        {"name":"threadState","isMut":true,"isSigner":false},
+        {"name":"mint","isMut":false,"isSigner":false},
+        {"name":"vaultAta","isMut":true,"isSigner":false},
+        {"name":"creatorAta","isMut":true,"isSigner":false},
+        {"name":"platform","isMut":false,"isSigner":false},
+        {"name":"platformAta","isMut":true,"isSigner":false},
+        {"name":"tokenProgram","isMut":false,"isSigner":false}
+      ],
+      "args":[]
+    },
+    {
+      "name":"refund",
+      "accounts":[
+        {"name":"threadState","isMut":true,"isSigner":false},
+        {"name":"mint","isMut":false,"isSigner":false},
+        {"name":"vaultAta","isMut":true,"isSigner":false},
+        {"name":"fanAta","isMut":true,"isSigner":false},
+        {"name":"tokenProgram","isMut":false,"isSigner":false}
+      ],
+      "args":[]
+    }
+  ]
+}

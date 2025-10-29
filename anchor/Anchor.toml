@@ -1,0 +1,13 @@
+[features]
+seeds = true
+skip-lint = false
+
+[programs.devnet]
+ror_escrow = "RoREscrow1111111111111111111111111111111111" # placeholder, wird beim Deploy ersetzt
+
+[registry]
+url = "https://anchor.projectserum.com"
+
+[provider]
+cluster = "Devnet"
+wallet = "~/.config/solana/id.json"
