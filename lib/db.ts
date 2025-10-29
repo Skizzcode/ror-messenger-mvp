@@ -1,13 +1,40 @@
+// lib/db.ts
+import { Redis } from '@upstash/redis';
 
-import fs from 'fs';
-import path from 'path';
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
 
-const DB = path.join(process.cwd(), 'tmp-db.json');
+const KEY = 'ror:db:v1';
 
-export function readDB(){
-  try { return JSON.parse(fs.readFileSync(DB,'utf-8')); } catch(e){ return { threads:{}, messages:{}, escrows:{} }; }
+export type DB = {
+  threads: Record<string, any>;
+  messages: Record<string, any[]>;
+  escrows: Record<string, any>;
+  creators: Record<string, any>;
+  checkouts: Record<string, any>;
+};
+
+const EMPTY_DB: DB = {
+  threads: {},
+  messages: {},
+  escrows: {},
+  creators: {},
+  checkouts: {},
+};
+
+export async function readDB(): Promise<DB> {
+  const data = await redis.get<DB>(KEY);
+  return data || { ...EMPTY_DB };
 }
-export function writeDB(data){
-  fs.writeFileSync(DB, JSON.stringify(data,null,2));
+
+export async function writeDB(db: DB): Promise<void> {
+  await redis.set(KEY, db);
 }
-export function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+export function uid(): string {
+  // @ts-ignore
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'id_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
