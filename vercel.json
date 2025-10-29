@@ -1,5 +1,5 @@
 {
   "crons": [
-    { "path": "/api/maintenance/cleanup", "schedule": "0 0 * * *" } // 1x täglich ok auf Hobby
+    { "path": "/api/maintenance/cleanup", "schedule": "0 0 * * *" }
   ]
 }
