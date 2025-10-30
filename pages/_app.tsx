@@ -1,13 +1,19 @@
 // pages/_app.tsx
-import '../styles/globals.css';
 import type { AppProps } from 'next/app';
+import Head from 'next/head';
+import '../styles/globals.css';
 
-import { WalletCtx } from '../components/WalletCtx'; // <-- RELATIVER Import!
-
-export default function App({ Component, pageProps }: AppProps) {
+export default function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <WalletCtx>
-      <Component {...pageProps} />
-    </WalletCtx>
+    <>
+      <Head>
+        <title>Reply or Refund</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/logo-ror-glass.svg" />
+      </Head>
+      <div className="bg-[#0A0B0E] min-h-screen">
+        <Component {...pageProps} />
+      </div>
+    </>
   );
 }
