@@ -1,4 +1,7 @@
 /* styles/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --bg: #0a0b0e;
