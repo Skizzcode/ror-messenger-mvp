@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB, writeDB } from '../../../lib/db';
 import { verifyDetachedSig, extractTs } from '../../../lib/verify';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const { threadId, pubkeyBase58, msg, sigBase58 } = req.body || {};
@@ -12,7 +12,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   const expectedPrefix = `ROR|bind-fan|thread=${threadId}|fan=${pubkeyBase58}|ts=`;
-  if (!msg.startsWith(expectedPrefix)) return res.status(400).json({ error: 'Invalid payload' });
+  if (!msg.startsWith(expectedPrefix)) {
+    return res.status(400).json({ error: 'Invalid payload' });
+  }
 
   const ts = extractTs(msg);
   if (!ts || Math.abs(Date.now() - ts) > 5 * 60 * 1000) {
@@ -22,18 +24,21 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(400).json({ error: 'Invalid signature' });
   }
 
-  const db = readDB();
+  // ⬇️ Upstash: async read
+  const db = await readDB();
+  db.threads = db.threads || {};
+
   const th = db.threads[threadId];
   if (!th) return res.status(404).json({ error: 'Thread not found' });
 
-  // Nur erlauben, wenn bisher keine Fan-Wallet gebunden ist
+  // Only allow if not bound yet or same wallet re-binds
   if (th.fan_pubkey && th.fan_pubkey !== pubkeyBase58) {
     return res.status(409).json({ error: 'Thread already bound to another wallet' });
   }
 
   th.fan_pubkey = pubkeyBase58;
   th.boundAt = Date.now();
-  writeDB(db);
 
+  await writeDB(db);
   return res.json({ ok: true });
 }
