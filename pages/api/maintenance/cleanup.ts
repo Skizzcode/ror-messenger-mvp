@@ -9,60 +9,87 @@ type CleanupReport = {
   messagesDeleted: number;
   threadsArchived: number;
   retentionDays: number;
+  dryRun: boolean;
+  limit: number;
+  touchedThreadIds: string[];
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Optional query overrides: ?retentionDays=90
   const retentionDays = Math.max(1, Number(req.query.retentionDays ?? 90));
-  const retentionMs = retentionDays * 24 * 3600 * 1000;
+  const limit = Math.max(1, Math.min(5000, Number(req.query.limit ?? 1000)));
+  const dryRun = String(req.query.dryRun ?? 'false') === 'true';
 
-  const db = readDB();
+  const retentionMs = retentionDays * 24 * 3600 * 1000;
+  const archiveMs = Math.max(retentionMs, 180 * 24 * 3600 * 1000);
   const now = Date.now();
+
+  const db = await readDB();
 
   let autoRefunded = 0;
   let messagesDeleted = 0;
   let threadsArchived = 0;
+  const touchedThreadIds: string[] = [];
 
   // 1) Auto-refund: open + deadline abgelaufen
-  for (const th of Object.values<any>(db.threads || {})) {
-    if (th.status === 'open' && typeof th.deadline === 'number' && th.deadline < now) {
-      await refundEscrow({ threadId: th.id }); // stub; später on-chain
-      th.status = 'refunded';
-      th.refundedAt = now;
-      autoRefunded++;
+  for (const [id, th] of Object.entries<any>(db.threads || {})) {
+    if (autoRefunded >= limit) break;
+    if (th?.status === 'open' && typeof th.deadline === 'number' && th.deadline <= now) {
+      try {
+        if (!dryRun) {
+          await refundEscrow({ threadId: id }); // stub; später on-chain
+          th.status = 'refunded';
+          th.refundedAt = now;
+        }
+        autoRefunded++;
+        touchedThreadIds.push(id);
+      } catch {
+        // ignore in MVP
+      }
     }
   }
 
   // 2) Message retention: alte Messages löschen
-  for (const threadId of Object.keys(db.messages || {})) {
-    const arr = db.messages[threadId] || [];
+  for (const [threadId, arrAny] of Object.entries<any[]>(db.messages || {})) {
+    const arr = Array.isArray(arrAny) ? arrAny : [];
     const before = arr.length;
-    const kept = arr.filter((m: any) => (now - (m.ts || 0)) <= retentionMs);
-    messagesDeleted += before - kept.length;
-    db.messages[threadId] = kept;
+    const kept = arr.filter((m: any) => (now - (m?.ts || 0)) <= retentionMs);
+    const diff = before - kept.length;
+    if (diff > 0) {
+      messagesDeleted += diff;
+      if (!dryRun) db.messages[threadId] = kept;
+      touchedThreadIds.push(threadId);
+    }
+    if (messagesDeleted >= limit) break;
   }
 
-  // 3) Optional: Threads archivieren, wenn alt (z.B. 180 Tage)
-  const archiveMs = Math.max(retentionMs, 180 * 24 * 3600 * 1000);
-  for (const th of Object.values<any>(db.threads || {})) {
+  // 3) Threads archivieren, wenn lange inaktiv
+  for (const [id, th] of Object.entries<any>(db.threads || {})) {
+    if (threadsArchived >= limit) break;
+    const msgs = db.messages?.[id] || [];
     const lastTs =
-      (db.messages?.[th.id]?.at(-1)?.ts) ??
-      th.answeredAt ?? th.refundedAt ?? th.createdAt ?? 0;
-    if ((now - lastTs) > archiveMs && !th.archived) {
-      th.archived = true;
-      th.archivedAt = now;
+      (msgs.length ? msgs[msgs.length - 1]?.ts : undefined) ??
+      th?.answeredAt ?? th?.refundedAt ?? th?.createdAt ?? 0;
+    if (!th?.archived && (now - lastTs) > archiveMs) {
+      if (!dryRun) {
+        th.archived = true;
+        th.archivedAt = now;
+      }
       threadsArchived++;
+      touchedThreadIds.push(id);
     }
   }
 
-  writeDB(db);
+  if (!dryRun) await writeDB(db);
 
   const report: CleanupReport = {
     now,
     autoRefunded,
     messagesDeleted,
     threadsArchived,
-    retentionDays
+    retentionDays,
+    dryRun,
+    limit,
+    touchedThreadIds,
   };
   return res.json(report);
 }
