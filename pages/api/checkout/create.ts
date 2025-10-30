@@ -1,46 +1,62 @@
 // pages/api/checkout/create.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getStripe } from '../../../lib/stripe';
+import Stripe from 'stripe';
+import { readDB } from '../../../lib/db';
 
-const SITE =
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}` ||
-  'http://localhost:3000';
+// no explicit apiVersion -> use installed version
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { creator, amount = 20, ttlHours = 48, firstMessage = '' } = req.body || {};
-  if (!creator) return res.status(400).json({ error: 'Missing creator' });
+  const { creator, ttlHours = 48, firstMessage, ref } = req.body || {};
+  if (!creator || !firstMessage) {
+    return res.status(400).json({ error: 'Missing creator or firstMessage' });
+  }
 
-  const stripe = getStripe();
+  // load creator to get real price
+  const db = await readDB();
+  const ce = db.creators?.[creator];
+  const displayName = ce?.displayName || creator;
+  const price = Math.max(1, Number(ce?.price ?? 20)); // EUR
+  const amountInCents = Math.round(price * 100);
 
-  const session = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    payment_method_types: ['card'],
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: 'eur',
-          unit_amount: Math.round(Number(amount) * 100),
-          product_data: {
-            name: `Reply or Refund • ${creator}`,
-            description: 'Guaranteed reply or your money back',
+  // build origin for success/cancel
+  const origin =
+    (req.headers['x-forwarded-proto'] ? String(req.headers['x-forwarded-proto']) : 'https') +
+    '://' +
+    (req.headers['x-forwarded-host'] || req.headers.host);
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'eur',
+            unit_amount: amountInCents,
+            product_data: {
+              name: `Chat with ${displayName}`,
+              description: `Reply window: ${ttlHours}h`,
+            },
           },
+          quantity: 1,
         },
+      ],
+      metadata: {
+        creator,
+        ttlHours: String(ttlHours),
+        firstMessage,
+        ref: ref || '',
       },
-    ],
-    // ganz wichtig: NICHT mehr localhost
-    success_url: `${SITE}/checkout/success?sid={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${SITE}/checkout/cancel`,
-    metadata: {
-      creator,
-      amount,
-      ttlHours,
-      firstMessage,
-    },
-  });
+      success_url: `${origin}/checkout/success?sid={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/checkout/cancel`,
+    });
 
-  return res.json({ url: session.url });
+    return res.json({ url: session.url });
+  } catch (e: any) {
+    console.error('Stripe session error', e);
+    return res.status(500).json({ error: 'Stripe error' });
+  }
 }

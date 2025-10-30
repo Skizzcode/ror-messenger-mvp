@@ -32,40 +32,57 @@ export default function ChatPage({ handle }: { handle: string }) {
     }
   }, []);
 
+  // thread/messages
   const { data, mutate } = useSWR(
     () => (mounted ? `/api/thread?id=${handle}` : null),
     fetcher,
     { refreshInterval: 1500 }
   );
-
   const thread = data?.thread;
   const messages = data?.messages || [];
+  const creatorProfile = data?.creatorProfile || null;
 
+  // wenn es noch keinen Thread gibt → extra die creator-settings holen, damit wir den Preis kennen
+  const { data: creatorSettings } = useSWR(
+    () => (mounted && !thread ? `/api/creator-settings?handle=${creatorHandle}` : null),
+    fetcher
+  );
+  const creatorPrice = useMemo(
+    () => Math.max(1, Number(creatorSettings?.price ?? 20)),
+    [creatorSettings]
+  );
+
+  // Wallet
   const wallet = useWallet();
   const isConnected = !!wallet.publicKey;
   const walletPk = wallet.publicKey?.toBase58() || null;
 
+  // Rolle automatisch bestimmen
   const autoRole: 'fan' | 'creator' = useMemo(() => {
     if (!thread) return 'fan';
     if (walletPk && thread.creator_pubkey && walletPk === thread.creator_pubkey) return 'creator';
     return 'fan';
   }, [thread, walletPk]);
 
+  // Creator darf testweise als Fan
   const canActAsFan =
     walletPk &&
     thread?.creator_pubkey &&
     walletPk === thread.creator_pubkey &&
     walletPk !== thread.fan_pubkey;
 
+  // endgültige Rolle
   const role: 'fan' | 'creator' = forceRole ?? autoRole;
 
   const canSend = isConnected && text.trim().length > 0 && !sending;
 
+  // Scroll nach unten
   const listRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages, mounted]);
 
+  // Escrow für Fans
   const escrowTried = useRef(false);
   useEffect(() => {
     if (!mounted) return;
@@ -74,15 +91,16 @@ export default function ChatPage({ handle }: { handle: string }) {
       escrowTried.current = true;
       clientInitEscrow({
         threadId: thread.id,
-        amountUSDC: thread.amount || 20,
+        amountUSDC: thread.amount || creatorPrice,
         payer: wallet.publicKey,
         wallet: wallet as any,
       })
         .then((r) => setLastTx(r.tx))
         .catch(console.error);
     }
-  }, [thread, role, wallet.publicKey, mounted]);
+  }, [thread, role, wallet.publicKey, mounted, creatorPrice]);
 
+  // Countdown
   const timeLeft = useMemo(() => {
     if (!mounted || !thread) return null;
     const ms = Math.max(0, thread.deadline - Date.now());
@@ -90,6 +108,17 @@ export default function ChatPage({ handle }: { handle: string }) {
     const m = Math.floor((ms % 3600000) / 60000);
     return `${h}h ${m}m`;
   }, [thread, mounted, data]);
+
+  // 🆕 Name / Avatar sauber ableiten
+  const displayName =
+    creatorProfile?.displayName ||
+    thread?.creator_display_name ||
+    (thread ? `@${thread.creator}` : `Chat with ${creatorHandle}`);
+
+  const avatarSrc =
+    creatorProfile?.avatarDataUrl ||
+    thread?.creator_avatar ||
+    '/logo-ror-glass.svg';
 
   async function send() {
     if (!text.trim() || sending) return;
@@ -105,6 +134,7 @@ export default function ChatPage({ handle }: { handle: string }) {
 
     setSending(true);
     try {
+      // kein Thread → erstellen (Server nimmt Creator-Preis)
       if (!thread) {
         const signed = await signCreateThread(wallet as any, {
           creator: creatorHandle,
@@ -119,7 +149,6 @@ export default function ChatPage({ handle }: { handle: string }) {
           body: JSON.stringify({
             creator: creatorHandle,
             fan: wallet.publicKey!.toBase58(),
-            amount: 20,
             ttlHours: 48,
             firstMessage: text,
             fanPubkey: wallet.publicKey!.toBase58(),
@@ -136,6 +165,7 @@ export default function ChatPage({ handle }: { handle: string }) {
         return;
       }
 
+      // Thread existiert → Nachricht
       const signed = await signMessagePayload(wallet as any, {
         threadId: thread.id,
         from: role,
@@ -168,25 +198,28 @@ export default function ChatPage({ handle }: { handle: string }) {
 
   return (
     <div className="min-h-screen bg-background text-white flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/70 backdrop-blur border-b border-white/5">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      {/* HEADER */}
+      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur border-b border-white/5">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <img
-              src="/logo-ror-glass.svg"
-              alt="RoR"
-              className="h-8 w-8 rounded-2xl border border-white/10"
+              src={avatarSrc}
+              alt={displayName}
+              className="h-11 w-11 rounded-2xl border border-white/10 object-cover"
             />
             <div>
-              <div className="text-sm font-semibold">
-                {thread ? 'RoR Chat' : `Chat with ${creatorHandle}`}
-              </div>
+              <div className="text-sm font-semibold tracking-tight">{displayName}</div>
               <div className="text-[10px] text-white/40">
                 {thread ? `Time left: ${timeLeft || '—'}` : 'New conversation'}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {!thread && (
+              <span className="text-[11px] px-2 py-1 rounded-full bg-white/10 border border-white/15">
+                €{creatorPrice}
+              </span>
+            )}
             {canActAsFan && (
               <button
                 onClick={() => setForceRole((r) => (r ? null : 'fan'))}
@@ -207,14 +240,13 @@ export default function ChatPage({ handle }: { handle: string }) {
         </div>
       </header>
 
-      {/* Main */}
-      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 flex gap-6">
-        {/* Chat */}
-        <div className="flex-1 flex flex-col bg-white/5 border border-white/5 rounded-3xl backdrop-blur-sm min-h-[65vh] overflow-hidden">
-          {/* Stripe bind */}
+      {/* MAIN */}
+      <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-5 flex flex-col gap-4">
+        <div className="flex-1 bg-white/5 border border-white/5 rounded-3xl backdrop-blur-sm flex flex-col min-h-[65vh]">
+          {/* STRIPE BIND */}
           {mounted && thread?.paid_via === 'stripe' && !thread?.fan_pubkey && role === 'fan' && (
-            <div className="px-4 py-3 text-xs bg-yellow-400/10 border-b border-yellow-400/20 flex items-center justify-between gap-2">
-              <span>Bind this chat to your wallet.</span>
+            <div className="px-4 py-3 text-xs bg-yellow-400/10 border-b border-yellow-400/20 flex items-center justify-between gap-2 rounded-t-3xl">
+              <span className="text-white/80">Bind this chat to your wallet.</span>
               <button
                 className="bg-white text-black text-[10px] px-3 py-1 rounded-lg"
                 onClick={async () => {
@@ -245,23 +277,20 @@ export default function ChatPage({ handle }: { handle: string }) {
             </div>
           )}
 
-          {/* Messages */}
-          <div
-            ref={listRef}
-            className="flex-1 overflow-y-auto space-y-3 px-4 py-4"
-          >
+          {/* MESSAGES */}
+          <div ref={listRef} className="flex-1 overflow-y-auto space-y-3 px-4 py-4">
             {messages.map((m: any) => (
               <div
                 key={m.id}
                 className={
-                  'max-w-[75%] px-4 py-2 rounded-2xl text-sm leading-relaxed ' +
+                  'max-w-[78%] px-4 py-2 rounded-2xl text-sm leading-relaxed ' +
                   (m.from === 'fan'
                     ? 'bg-white text-black rounded-bl-md'
-                    : 'bg-slate-900/70 border border-white/10 rounded-br-md ml-auto')
+                    : 'bg-slate-900/80 border border-white/10 rounded-br-md ml-auto')
                 }
               >
                 <div className="text-[10px] uppercase tracking-wide opacity-40 mb-1">
-                  {m.from === 'fan' ? 'Fan' : 'Creator'}
+                  {m.from === 'fan' ? 'Fan' : displayName}
                 </div>
                 <div>{m.body}</div>
               </div>
@@ -273,8 +302,8 @@ export default function ChatPage({ handle }: { handle: string }) {
             )}
           </div>
 
-          {/* Input */}
-          <div className="px-4 py-3 border-t border-white/5 space-y-2">
+          {/* INPUT */}
+          <div className="px-4 py-3 border-t border-white/5 space-y-2 rounded-b-3xl">
             {!isConnected && role === 'fan' && (
               <button
                 onClick={async () => {
@@ -287,7 +316,6 @@ export default function ChatPage({ handle }: { handle: string }) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       creator: creatorHandle,
-                      amount: 20,
                       ttlHours: 48,
                       firstMessage: text,
                       ...(ref ? { ref } : {}),
@@ -298,12 +326,12 @@ export default function ChatPage({ handle }: { handle: string }) {
                 }}
                 className="bg-white text-black text-xs px-3 py-1.5 rounded-lg"
               >
-                Pay with card
+                Pay with card (€{creatorPrice})
               </button>
             )}
 
             <textarea
-              className="w-full bg-black/25 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-white/20 disabled:opacity-40"
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-white/20 disabled:opacity-40"
               placeholder={role === 'creator' ? 'Write your reply…' : 'Write your message…'}
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -317,6 +345,7 @@ export default function ChatPage({ handle }: { handle: string }) {
               }}
               disabled={!isConnected}
             />
+
             <div className="flex items-center justify-between gap-2">
               <button
                 onClick={send}
@@ -325,34 +354,13 @@ export default function ChatPage({ handle }: { handle: string }) {
               >
                 {sending ? 'Sending…' : role === 'creator' ? 'Send reply' : 'Send & lock'}
               </button>
-              <span className="text-[10px] text-white/35">
-                {role === 'creator'
-                  ? 'First good reply releases escrow.'
-                  : 'Enter = send (desktop)'}
-              </span>
+              {role === 'fan' ? (
+                <span className="text-[10px] text-white/35">Enter = send (desktop)</span>
+              ) : (
+                <span className="text-[10px] text-white/35">First good reply releases escrow.</span>
+              )}
             </div>
           </div>
-        </div>
-
-        {/* Right column */}
-        <div className="w-56 hidden lg:flex flex-col gap-3">
-          <div className="card p-3">
-            <div className="text-xs text-white/50 mb-1">About</div>
-            <div className="text-sm font-medium">{creatorHandle}</div>
-            {thread ? (
-              <div className="text-[11px] text-white/30 mt-1">
-                amount: {thread.amount ?? 20} · status: {thread.status}
-              </div>
-            ) : (
-              <div className="text-[11px] text-white/30 mt-1">New chat will be created.</div>
-            )}
-          </div>
-          {thread?.ref && (
-            <div className="card p-3 text-[11px]">
-              <div className="text-xs text-white/50 mb-1">Ref</div>
-              <div className="break-all">{thread.ref}</div>
-            </div>
-          )}
         </div>
       </main>
     </div>

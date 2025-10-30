@@ -9,46 +9,68 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Missing fanPubkey' });
   }
 
-  // ⬇️ Upstash: async read
+  // 1) DB lesen
   const db = await readDB();
 
-  // Alle Threads des Fans
-  const threads = Object.values<any>(db.threads || {}).filter(
+  const allThreads = Object.values<any>(db.threads || {}).filter(
     (t: any) => t?.fan_pubkey === fanPubkey
   );
 
-  // Optional: Lazy TTL je Thread (abgelaufene open → refunded)
-  for (const t of threads) {
+  // 2) Lazy TTL für diese Threads (open → ggf. refunded)
+  for (const t of allThreads) {
     try {
       await touchExpiryForThread(t.id);
     } catch {
-      // MVP: still continue; status wird ggf. später bereinigt
+      // MVP: ignore
     }
   }
 
-  // Nach evtl. Status-Änderungen erneut lesen
+  // 3) Nochmal lesen, falls sich Status geändert hat
   const db2 = await readDB();
 
-  const withDerived = threads.map((t: any) => {
+  // 4) Threads anreichern
+  const withDerived = allThreads.map((t: any) => {
+    const creatorHandle = t.creator;
+    const creatorEntry = (db2.creators || {})[creatorHandle] || null;
+
+    const creatorProfile = creatorEntry
+      ? {
+          handle: creatorEntry.handle,
+          displayName: creatorEntry.displayName || creatorEntry.handle || creatorHandle,
+          avatarDataUrl: creatorEntry.avatarDataUrl || null,
+          price: typeof creatorEntry.price === 'number' ? creatorEntry.price : 20,
+        }
+      : {
+          handle: creatorHandle,
+          displayName: creatorHandle,
+          avatarDataUrl: null,
+          price: 20,
+        };
+
     const msgs = db2.messages?.[t.id] || [];
     const now = Date.now();
     const remainingMs = Math.max(0, (t.deadline ?? 0) - now);
+
+    const latestThread = db2.threads?.[t.id] || t;
+
     return {
       id: t.id,
-      status: db2.threads?.[t.id]?.status ?? t.status,
+      status: latestThread.status,
       amount: t.amount,
       createdAt: t.createdAt,
       deadline: t.deadline,
       remainingMs,
       messagesCount: msgs.length,
       lastMessageAt: msgs.length ? msgs[msgs.length - 1].ts : null,
+      creatorProfile, // 👈 neu
     };
   });
 
+  // 5) gruppieren wie vorher
   const grouped = {
-    open: withDerived.filter(t => t.status === 'open'),
-    answered: withDerived.filter(t => t.status === 'answered'),
-    refunded: withDerived.filter(t => t.status === 'refunded'),
+    open: withDerived.filter((t) => t.status === 'open'),
+    answered: withDerived.filter((t) => t.status === 'answered'),
+    refunded: withDerived.filter((t) => t.status === 'refunded'),
     all: withDerived.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
   };
 

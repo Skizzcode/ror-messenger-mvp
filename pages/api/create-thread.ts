@@ -10,17 +10,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const {
     creator,
     fan,
-    amount = 20,
+    // amount is IGNORED now (authoritative = creator settings)
     ttlHours = 48,
     firstMessage,
     fanPubkey,
     creatorPubkey = null,
-    // optional
-    ref = null,
     // signing fields
     sigBase58,
     msg,
     pubkeyBase58,
+    // optional: marketing ref from URL (fan ref)
+    ref,
   } = req.body || {};
 
   if (!creator || !fan || !firstMessage) {
@@ -48,10 +48,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid signature' });
   }
 
+  // DB
   const db = await readDB();
   db.threads = db.threads || {};
   db.messages = db.messages || {};
-  db.escrows = db.escrows || {};
+  db.escrows  = db.escrows  || {};
+  db.creators = db.creators || {};
+
+  // authoritative price from creator settings
+  const creatorEntry = db.creators[creator] || null;
+  const priceFromCreator = Math.max(1, Number(creatorEntry?.price ?? 20));
+  const referredByCreatorCode = creatorEntry?.referredBy || null;
+  const creatorDisplayName = creatorEntry?.displayName || null;
+  const creatorAvatar = creatorEntry?.avatarDataUrl || null;
 
   const id = uid();
   const now = Date.now();
@@ -60,26 +69,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     id,
     creator,
     fan,
-    amount,
+    amount: priceFromCreator,
     createdAt: now,
     deadline: now + ttlHours * 3600 * 1000,
     status: 'open',
     fan_pubkey: fanPubkey,
     creator_pubkey: creatorPubkey,
     paid_via: 'wallet',
-    ...(ref ? { ref } : {}), // 👈 neu
+    referredByCreatorCode,
+    creator_display_name: creatorDisplayName,
+    creator_avatar: creatorAvatar,
+    ref: ref || null,
   };
 
   db.messages[id] = [
-    { id: uid(), threadId: id, from: 'fan', body: firstMessage, ts: now },
+    { id: uid(), threadId: id, from: 'fan', body: firstMessage, ts: now }
   ];
 
   try {
-    const esc = await initEscrow({ threadId: id, amount, deadlineMs: ttlHours * 3600 * 1000 });
+    const esc = await initEscrow({ threadId: id, amount: priceFromCreator, deadlineMs: ttlHours * 3600 * 1000 });
     db.escrows[id] = { status: esc.status, until: esc.until, source: 'wallet' };
-  } catch {
-    /* mvp ignore */
-  }
+  } catch { /* ignore in MVP */ }
 
   await writeDB(db);
   return res.json({ threadId: id });
