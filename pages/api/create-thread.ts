@@ -15,10 +15,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     firstMessage,
     fanPubkey,
     creatorPubkey = null,
+    // optional
+    ref = null,
     // signing fields
     sigBase58,
     msg,
-    pubkeyBase58
+    pubkeyBase58,
   } = req.body || {};
 
   if (!creator || !fan || !firstMessage) {
@@ -46,13 +48,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid signature' });
   }
 
-  // ⬇️ Upstash: async read + init
   const db = await readDB();
   db.threads = db.threads || {};
   db.messages = db.messages || {};
-  db.escrows  = db.escrows  || {};
+  db.escrows = db.escrows || {};
 
-  // Create thread
   const id = uid();
   const now = Date.now();
 
@@ -66,18 +66,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     status: 'open',
     fan_pubkey: fanPubkey,
     creator_pubkey: creatorPubkey,
-    paid_via: 'wallet'
+    paid_via: 'wallet',
+    ...(ref ? { ref } : {}), // 👈 neu
   };
 
   db.messages[id] = [
-    { id: uid(), threadId: id, from: 'fan', body: firstMessage, ts: now }
+    { id: uid(), threadId: id, from: 'fan', body: firstMessage, ts: now },
   ];
 
-  // Escrow stub (v1)
   try {
     const esc = await initEscrow({ threadId: id, amount, deadlineMs: ttlHours * 3600 * 1000 });
     db.escrows[id] = { status: esc.status, until: esc.until, source: 'wallet' };
-  } catch { /* ignore in MVP */ }
+  } catch {
+    /* mvp ignore */
+  }
 
   await writeDB(db);
   return res.json({ threadId: id });

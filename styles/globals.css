@@ -1,11 +1,81 @@
+/* styles/globals.css */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+:root {
+  --bg: #0a0b0e;
+  --card: rgba(255, 255, 255, 0.02);
+  --border: rgba(255, 255, 255, 0.05);
+  --radius-lg: 1.5rem;
+  --accent: #ffffff;
+  --muted: rgba(255, 255, 255, 0.4);
+}
 
-:root{ color-scheme: dark; }
-html,body,#__next{ height:100%; }
-body{ @apply bg-bg text-text; }
-.btn{ @apply px-4 py-2 rounded-xl bg-accent text-black font-semibold active:scale-95 transition; }
-.card{ @apply bg-panel/80 backdrop-blur border border-white/10 rounded-2xl; }
-.input{ @apply w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-text placeholder:opacity-50; }
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--bg);
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: #fff;
+  color: #000;
+  border-radius: 9999px;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+  box-shadow: 0 10px 40px rgba(255, 255, 255, 0.12);
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+  padding: 0.45rem 0.8rem;
+  color: #fff;
+  font-size: 0.8rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(26px);
+}
+
+.text-muted {
+  color: var(--muted);
+}
+
+/* simple scrollbar on desktop */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 9999px;
+  }
+}

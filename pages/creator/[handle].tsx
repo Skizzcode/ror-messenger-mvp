@@ -1,33 +1,47 @@
 // pages/creator/[handle].tsx
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function CreatorDashboard({ handle }: { handle: string }) {
-  // Threads + Settings + Stats
-  const { data: threads } = useSWR(`/api/creator-threads?handle=${handle}`, fetcher, { refreshInterval: 3000 });
-  const { data: settings, mutate: mutateSettings } = useSWR(`/api/creator-settings?handle=${handle}`, fetcher);
-  const { data: stats } = useSWR(`/api/creator-stats?handle=${handle}`, fetcher, { refreshInterval: 5000 });
+  // API-Daten
+  const { data: threads } = useSWR(`/api/creator-threads?handle=${handle}`, fetcher, {
+    refreshInterval: 3000,
+  });
+  const { data: settings, mutate: mutateSettings } = useSWR(
+    `/api/creator-settings?handle=${handle}`,
+    fetcher
+  );
+  const { data: stats } = useSWR(`/api/creator-stats?handle=${handle}`, fetcher, {
+    refreshInterval: 5000,
+  });
 
-  // Local state (settings form)
+  // Form-States
+  const [displayName, setDisplayName] = useState(handle);
   const [price, setPrice] = useState<number>(20);
   const [replyWindowHours, setReplyWindowHours] = useState<number>(48);
   const [walletStr, setWalletStr] = useState<string>('');
+  const [refCode, setRefCode] = useState<string>('');
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
 
   const walletAdapter = useWallet();
 
+  // API → State
   useEffect(() => {
     if (settings) {
+      setDisplayName(settings.displayName ?? handle);
       setPrice(settings.price ?? 20);
       setReplyWindowHours(settings.replyWindowHours ?? 48);
       setWalletStr(settings.wallet ?? '');
+      setRefCode(settings.refCode ?? '');
+      setAvatarUrl(settings.avatarUrl ?? '');
     }
-  }, [settings]);
+  }, [settings, handle]);
 
-  // Totals
+  // Threads zählen
   const totals = useMemo(() => {
     const g = threads?.grouped;
     return {
@@ -38,18 +52,28 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
     };
   }, [threads]);
 
-  // Referral link (uses current origin)
+  // Ref-Link bauen
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const refLink = settings?.refCode ? `${baseUrl}/?ref=${settings.refCode}` : '';
+  const refLink =
+    refCode && baseUrl ? `${baseUrl}/c/${handle}?ref=${encodeURIComponent(refCode)}` : '';
 
   async function saveSettings() {
-    const r = await fetch('/api/creator-settings', {
+    const r = await fetch(`/api/creator-settings?handle=${handle}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ handle, price, replyWindowHours, wallet: walletStr })
+      body: JSON.stringify({
+        handle,
+        displayName,
+        price,
+        replyWindowHours,
+        wallet: walletStr,
+        refCode,
+        avatarUrl,
+      }),
     });
-    if (r.ok) mutateSettings();
-    else {
+    if (r.ok) {
+      mutateSettings();
+    } else {
       const j = await r.json().catch(() => ({}));
       alert(j?.error || 'Failed to save');
     }
@@ -62,34 +86,52 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <header className="sticky top-0 z-10 bg-black/40 backdrop-blur border-b border-white/10">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="font-black text-lg">RoR • Creator Dashboard</div>
-          <div className="text-sm text-muted">@{handle}</div>
+    <div className="min-h-screen bg-[#0A0B0E] text-white">
+      {/* Header */}
+      <header className="sticky top-0 z-20 bg-black/20 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo-ror-glass.svg"
+              alt="RoR"
+              className="h-8 w-8 rounded-2xl border border-white/10 shadow-sm"
+            />
+            <div>
+              <div className="text-sm text-white/40">Reply or Refund</div>
+              <div className="text-2xl font-semibold tracking-tight">
+                {displayName || handle}
+              </div>
+              <div className="text-[10px] text-white/25">@{handle}</div>
+            </div>
+          </div>
+          <div className="flex gap-2 items-center">
+            <Link
+              href={`/c/${handle}`}
+              className="bg-white/10 hover:bg-white/20 transition px-3 py-1.5 rounded-xl text-xs"
+            >
+              Open chat
+            </Link>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6 grid gap-6 md:grid-cols-3">
-        {/* LEFT: Overview + Threads */}
+      {/* Main */}
+      <main className="max-w-6xl mx-auto px-4 py-6 grid gap-6 md:grid-cols-3">
+        {/* LEFT: stats + threads */}
         <section className="md:col-span-2 space-y-6">
-          {/* Overview grid (overgrids updated) */}
+          {/* Stats */}
           <div className="grid grid-cols-4 gap-3">
-            {/* Earnings card (spans 2 columns) */}
-            <div className="p-3 rounded-xl border border-white/10 col-span-4 md:col-span-2">
-              <div className="text-xs text-muted">Earnings (MTD)</div>
-              <div className="text-2xl font-bold">€{(stats?.revenue?.mtd ?? 0).toFixed(2)}</div>
-              <div className="text-xs text-muted mt-1">All-time: €{(stats?.revenue?.allTime ?? 0).toFixed(2)}</div>
-            </div>
-            {/* Quick stats */}
+            <Stat
+              label="Earnings (MTD)"
+              value={stats ? `€${(stats.revenue?.mtd ?? 0).toFixed(2)}` : '—'}
+              wide
+            />
             <Stat label="Open" value={totals.open} />
             <Stat label="Answered" value={totals.answered} />
             <Stat label="Refunded" value={totals.refunded} />
-            {/* Optional: total (mobile stacks below) */}
-            <Stat label="All" value={totals.all} />
           </div>
 
-          {/* Threads tabs */}
+          {/* Threads */}
           <Tabs
             tabs={[
               { key: 'open', label: 'Open', items: threads?.grouped?.open || [] },
@@ -97,77 +139,126 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
               { key: 'refunded', label: 'Refunded', items: threads?.grouped?.refunded || [] },
             ]}
             renderItem={(t: any) => (
-              <div key={t.id} className="p-3 rounded-xl border border-white/10 flex items-center justify-between">
+              <div
+                key={t.id}
+                className="p-3 rounded-2xl bg-white/[0.01] border border-white/[0.04] flex items-center justify-between gap-3"
+              >
                 <div>
-                  <div className="font-semibold">{t.id.slice(0, 8)}…</div>
-                  <div className="text-xs text-muted">
+                  <div className="font-semibold text-sm">Thread {t.id.slice(0, 8)}…</div>
+                  <div className="text-xs text-white/40">
                     {t.status.toUpperCase()} · {t.messagesCount} msgs
                     {t.status === 'open' && <> · ⏳ {formatRemaining(t.remainingMs)} left</>}
+                    {t.ref && (
+                      <>
+                        {' '}
+                        · <span className="text-[10px] text-white/30">ref: {t.ref}</span>
+                      </>
+                    )}
                   </div>
                 </div>
-                <Link href={`/c/${t.id}`} className="btn">Open chat</Link>
+                <Link
+                  href={`/c/${t.id}`}
+                  className="bg-white text-black text-xs px-3 py-1.5 rounded-xl"
+                >
+                  Open chat
+                </Link>
               </div>
             )}
           />
         </section>
 
-        {/* RIGHT: Settings & Referral */}
+        {/* RIGHT: settings */}
         <aside className="space-y-6">
-          {/* Settings */}
-          <div className="card p-4 space-y-3">
-            <div className="font-semibold">Settings</div>
+          <div className="rounded-2xl bg-white/[0.02] border border-white/[0.04] p-4 space-y-3 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="avatar"
+                  className="h-10 w-10 rounded-2xl object-cover"
+                />
+              ) : (
+                <div className="h-10 w-10 rounded-2xl bg-white/5 flex items-center justify-center text-xs">
+                  {(displayName || handle).slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div>
+                <div className="text-sm font-medium">Settings</div>
+                <div className="text-xs text-white/40">Public profile, wallet, price</div>
+              </div>
+            </div>
 
-            <label className="text-sm text-muted">Price (EUR or USDC equiv.)</label>
+            <label className="text-xs text-white/40">Display name</label>
             <input
-              className="input"
+              className="bg-black/30 border border-white/5 rounded-xl px-3 py-2 text-sm"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Kenny • Solana"
+            />
+
+            <label className="text-xs text-white/40">Price (EUR/USDC)</label>
+            <input
               type="number"
-              min={1}
+              className="bg-black/30 border border-white/5 rounded-xl px-3 py-2 text-sm"
               value={price}
               onChange={(e) => setPrice(Number(e.target.value))}
             />
 
-            <label className="text-sm text-muted">Reply window (hours)</label>
+            <label className="text-xs text-white/40">Reply window (hours)</label>
             <input
-              className="input"
               type="number"
-              min={1}
+              className="bg-black/30 border border-white/5 rounded-xl px-3 py-2 text-sm"
               value={replyWindowHours}
               onChange={(e) => setReplyWindowHours(Number(e.target.value))}
             />
 
-            <label className="text-sm text-muted">Payout wallet (Solana pubkey)</label>
+            <label className="text-xs text-white/40">Payout wallet (Solana)</label>
             <input
-              className="input"
-              placeholder="Your Solana public key"
+              className="bg-black/30 border border-white/5 rounded-xl px-3 py-2 text-sm"
               value={walletStr}
               onChange={(e) => setWalletStr(e.target.value)}
+              placeholder="Your public key"
             />
 
-            <div className="grid grid-cols-2 gap-2">
-              <button className="btn w-full" onClick={saveSettings}>Save</button>
-              <button
-                className="btn w-full"
-                onClick={() => {
-                  const pk = walletAdapter.publicKey?.toBase58();
-                  if (!pk) { alert('Connect a wallet in your browser first.'); return; }
-                  setWalletStr(pk);
-                }}
-              >
-                Bind from connected wallet
-              </button>
-            </div>
-          </div>
+            <label className="text-xs text-white/40">Avatar URL</label>
+            <input
+              className="bg-black/30 border border-white/5 rounded-xl px-3 py-2 text-sm"
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              placeholder="https://…"
+            />
 
-          {/* Referral */}
-          <div className="card p-4 space-y-3">
-            <div className="font-semibold">Referral</div>
-            <p className="text-sm text-muted">Earn a recurring cut for each creator who joins via your link.</p>
-            <div className="input break-all">{refLink || 'Loading…'}</div>
+            <label className="text-xs text-white/40">Ref code</label>
+            <input
+              className="bg-black/30 border border-white/5 rounded-xl px-3 py-2 text-sm"
+              value={refCode}
+              onChange={(e) => setRefCode(e.target.value)}
+              placeholder="TIKTOK-JAN"
+            />
+
             <button
-              className="btn w-full"
-              onClick={() => { if (refLink) navigator.clipboard.writeText(refLink); }}
+              onClick={saveSettings}
+              className="w-full bg-white text-black py-2 rounded-xl text-sm"
             >
-              Copy link
+              Save settings
+            </button>
+
+            {refLink && (
+              <div className="text-[10px] text-white/30 break-all">Your invite: {refLink}</div>
+            )}
+
+            <button
+              onClick={() => {
+                const pk = walletAdapter.publicKey?.toBase58();
+                if (!pk) {
+                  alert('Connect wallet first');
+                  return;
+                }
+                setWalletStr(pk);
+              }}
+              className="w-full bg-white/5 py-1.5 rounded-xl text-xs text-white/70"
+            >
+              Use connected wallet
             </button>
           </div>
         </aside>
@@ -176,35 +267,53 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+// small helpers ---------------------------------------------------
+
+function Stat({ label, value, wide }: { label: string; value: any; wide?: boolean }) {
   return (
-    <div className="p-3 rounded-xl border border-white/10 text-center">
-      <div className="text-2xl font-bold">{value}</div>
-      <div className="text-xs text-muted">{label}</div>
+    <div
+      className={
+        'rounded-2xl bg-white/[0.02] border border-white/[0.03] p-4 backdrop-blur-sm ' +
+        (wide ? 'col-span-2' : '')
+      }
+    >
+      <div className="text-xs text-white/35">{label}</div>
+      <div className="text-2xl font-semibold mt-1 tracking-tight">{value}</div>
     </div>
   );
 }
 
 function Tabs({
-  tabs, renderItem
-}: { tabs: { key: string; label: string; items: any[] }[]; renderItem: (x: any) => ReactNode }) {
+  tabs,
+  renderItem,
+}: {
+  tabs: { key: string; label: string; items: any[] }[];
+  renderItem: (x: any) => ReactNode;
+}) {
   const [active, setActive] = useState(tabs[0]?.key || 'open');
-  const items = tabs.find(t => t.key === active)?.items || [];
+  const items = tabs.find((t) => t.key === active)?.items || [];
   return (
     <div className="space-y-3">
       <div className="flex gap-2 flex-wrap">
-        {tabs.map(t => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setActive(t.key)}
-            className={'px-3 py-1 rounded-full text-sm border ' + (active === t.key ? 'bg-accent text-black border-transparent' : 'border-white/20')}
+            className={
+              'px-3 py-1.5 rounded-full text-sm border ' +
+              (active === t.key ? 'bg-white text-black border-transparent' : 'border-white/10')
+            }
           >
             {t.label}
           </button>
         ))}
       </div>
       <div className="space-y-2">
-        {items.length ? items.map(renderItem) : <div className="text-muted text-sm">Nothing here.</div>}
+        {items.length ? (
+          items.map(renderItem)
+        ) : (
+          <div className="text-xs text-white/25">Nothing here.</div>
+        )}
       </div>
     </div>
   );
