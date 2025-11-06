@@ -45,6 +45,13 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const refLink = settings?.refCode ? `${baseUrl}/creator/join?ref=${settings.refCode}` : '';
 
+  // 🔥 new: referral stats via your refCode
+  const { data: refStats } = useSWR(
+    () => (settings?.refCode ? `/api/ref-stats?code=${encodeURIComponent(settings.refCode)}` : null),
+    fetcher,
+    { refreshInterval: 10000 }
+  );
+
   async function saveSettings(extra?: Record<string, any>) {
     const body = {
       handle,
@@ -297,6 +304,43 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
             >
               Copy link
             </button>
+          </div>
+
+          {/* 🔥 Referrals card */}
+          <div className="card p-4 space-y-2">
+            <div className="font-semibold">Referrals</div>
+            {!settings?.refCode ? (
+              <div className="text-sm text-white/45">Generating code…</div>
+            ) : !refStats ? (
+              <div className="text-sm text-white/45">Loading…</div>
+            ) : (
+              <>
+                <div className="text-sm">
+                  <b>{refStats.creatorsCount}</b> creators joined via your link
+                </div>
+                <div className="text-sm text-white/45">
+                  GMV (all chats by referred creators): <b>€{(refStats.totals?.revenueAll ?? 0).toFixed(2)}</b>
+                </div>
+                <div className="text-sm text-white/45">
+                  Paid (answered only): <b>€{(refStats.totals?.revenueAnswered ?? 0).toFixed(2)}</b>
+                </div>
+
+                {Array.isArray(refStats.creators) && refStats.creators.length > 0 && (
+                  <div className="text-xs text-white/45 pt-2">
+                    Latest signups:
+                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                      {refStats.creators.slice(0, 5).map((c: any) => (
+                        <li key={c.handle}>
+                          <Link className="underline" href={`/creator/${c.handle}`}>
+                            {c.displayName} (@{c.handle})
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </aside>
       </main>
