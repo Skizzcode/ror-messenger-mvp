@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { useWallet } from '@solana/wallet-adapter-react';
 
 const WalletMultiButton = dynamic(
   async () => (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
@@ -16,19 +17,34 @@ function debounce<T extends (...args: any[]) => any>(fn: T, ms = 300) {
   };
 }
 
+async function buildAuthHeaders(wallet: any) {
+  if (!wallet?.publicKey || !wallet?.signMessage) return null;
+  const pub = wallet.publicKey.toBase58();
+  const msg = `ROR|auth|wallet=${pub}|ts=${Date.now()}`;
+  const enc = new TextEncoder().encode(msg);
+  const sig = await wallet.signMessage(enc);
+  const { default: bs58 } = await import('bs58');
+  return { 'x-wallet': pub, 'x-msg': msg, 'x-sig': bs58.encode(sig) };
+}
+
 export default function CreatorJoin() {
+  const wallet = useWallet();
+
   const [mounted, setMounted] = useState(false);
-  const [refCode, setRefCode] = useState<string | null>(null);
+  const [refCode, setRefCode] = useState<string>('');
 
   const [handle, setHandle] = useState('');
+  const cleanHandle = useMemo(
+    () => handle.toLowerCase().replace(/[^a-z0-9\-_.]/g, ''),
+    [handle]
+  );
+
   const [displayName, setDisplayName] = useState('');
-  const [price, setPrice] = useState<number>(20);
-  const [replyWindowHours, setReplyWindowHours] = useState<number>(48);
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
   const [checking, setChecking] = useState(false);
-  const [available, setAvailable] = useState<boolean | null>(null); // null = noch nichts geprüft
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -39,16 +55,11 @@ export default function CreatorJoin() {
     }
   }, []);
 
-  const cleanHandle = useMemo(
-    () => handle.toLowerCase().replace(/[^a-z0-9-_]/g, ''),
-    [handle]
-  );
-
-  // Live availability check (debounced)
-  const checkAvailability = useMemo(
+  // Debounced Availability Check
+  const debouncedCheck = useMemo(
     () =>
       debounce(async (h: string) => {
-        if (!h || h.length < 2) {
+        if (!h || h.length < 3) {
           setAvailable(null);
           setChecking(false);
           return;
@@ -68,8 +79,8 @@ export default function CreatorJoin() {
 
   useEffect(() => {
     setChecking(true);
-    checkAvailability(cleanHandle);
-  }, [cleanHandle, checkAvailability]);
+    debouncedCheck(cleanHandle);
+  }, [cleanHandle, debouncedCheck]);
 
   async function onAvatarFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -87,29 +98,31 @@ export default function CreatorJoin() {
   }
 
   async function submit() {
-    if (!cleanHandle || cleanHandle.length < 2) {
-      alert('Pick a valid handle (letters/numbers, min 2).');
+    // harte Regeln: Wallet + gültiger Handle + verfügbar + Ref nötig (Server enforced)
+    if (!wallet.publicKey) { alert('Connect wallet first.'); return; }
+    if (!/^[a-z0-9\-_.]{3,24}$/.test(cleanHandle)) {
+      alert('Handle must be 3–24 chars (a-z, 0-9, -, _, .)');
       return;
     }
-    if (!available) {
+    if (available !== true) {
       alert('Handle is not available.');
       return;
     }
     setSubmitting(true);
     try {
+      const headers = await buildAuthHeaders(wallet as any);
+      if (!headers) throw new Error('Wallet must support message signing.');
       const r = await fetch('/api/creator-claim', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(headers as any) },
         body: JSON.stringify({
           handle: cleanHandle,
-          displayName,
-          price,
-          replyWindowHours,
+          displayName: displayName.trim() || cleanHandle,
           avatarDataUrl,
-          ref: refCode || null,
+          ref: refCode || null, // Server verlangt Ref, wenn OPEN_SIGNUPS=false
         }),
       });
-      const j = await r.json();
+      const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j?.error || 'Failed to create');
       window.location.href = `/creator/${j.handle}`;
     } catch (e: any) {
@@ -121,7 +134,7 @@ export default function CreatorJoin() {
 
   const canSubmit =
     !!cleanHandle &&
-    cleanHandle.length >= 2 &&
+    /^[a-z0-9\-_.]{3,24}$/.test(cleanHandle) &&
     available === true &&
     !submitting;
 
@@ -145,8 +158,8 @@ export default function CreatorJoin() {
         <div className="card p-5 space-y-5">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-lg font-semibold">Become a creator</div>
-              <div className="text-xs text-white/40">Set your inbox, avatar and pricing.</div>
+              <div className="text-lg font-semibold">Claim your creator inbox</div>
+              <div className="text-xs text-white/40">Invite-only. Handle, avatar, and name in one minute.</div>
             </div>
             {refCode && (
               <span className="text-[10px] px-2 py-1 rounded-full bg-white/10 border border-white/15">
@@ -156,6 +169,7 @@ export default function CreatorJoin() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
+            {/* Handle */}
             <div className="space-y-2">
               <label className="text-sm text-white/60">Handle</label>
               <div className="flex items-center gap-2">
@@ -183,6 +197,7 @@ export default function CreatorJoin() {
               <div className="text-[11px] text-white/35">Public URL: /c/{cleanHandle || 'your-handle'}</div>
             </div>
 
+            {/* Display name */}
             <div className="space-y-2">
               <label className="text-sm text-white/60">Display name</label>
               <input
@@ -193,28 +208,7 @@ export default function CreatorJoin() {
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm text-white/60">Price (EUR)</label>
-              <input
-                className="input"
-                type="number"
-                min={1}
-                value={price}
-                onChange={(e) => setPrice(Number(e.target.value))}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm text-white/60">Reply window (hours)</label>
-              <input
-                className="input"
-                type="number"
-                min={1}
-                value={replyWindowHours}
-                onChange={(e) => setReplyWindowHours(Number(e.target.value))}
-              />
-            </div>
-
+            {/* Avatar */}
             <div className="space-y-2">
               <label className="text-sm text-white/60">Avatar (upload)</label>
               <input
@@ -233,11 +227,25 @@ export default function CreatorJoin() {
                 <div className="text-[11px] text-white/35">No avatar selected.</div>
               )}
             </div>
+
+            {/* Referral */}
+            <div className="space-y-2">
+              <label className="text-sm text-white/60">Referral / Invite code</label>
+              <input
+                className="input"
+                placeholder="Paste your referral code"
+                value={refCode}
+                onChange={(e) => setRefCode(e.target.value)}
+              />
+              <div className="text-[11px] text-white/40">
+                Access is invite-only. Ask a creator for their link/code.
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-2">
             <button onClick={submit} disabled={!canSubmit} className="btn">
-              {submitting ? 'Creating…' : 'Create my creator inbox'}
+              {submitting ? 'Creating…' : 'Create my inbox'}
             </button>
             <Link href="/" className="text-sm px-4 py-2 rounded-full border border-white/15 hover:bg-white/5">
               Cancel
@@ -245,8 +253,8 @@ export default function CreatorJoin() {
           </div>
 
           <p className="text-[11px] text-white/35">
-            You can connect your payout wallet on the dashboard. Fans can pay by wallet or card. If you don’t reply in time,
-            fans get an automatic refund.
+            After creation, set price & reply window in your dashboard. Fans pay by wallet or card.
+            If you don’t reply in time, the chat auto-refunds.
           </p>
         </div>
       </main>

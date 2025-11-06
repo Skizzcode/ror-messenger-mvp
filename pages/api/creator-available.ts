@@ -3,12 +3,13 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB } from '../../lib/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const raw = (req.query.handle as string | undefined) || '';
-  const handle = raw.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
-  if (!handle || handle.length < 2) {
-    return res.status(200).json({ available: false, reason: 'invalid' });
-  }
+  const raw = String(req.query.handle || '').trim().toLowerCase();
+
+  // gleiche Regeln wie beim Claim
+  const valid = /^[a-z0-9\-_.]{3,24}$/.test(raw);
+  if (!valid) return res.json({ available: false, reason: 'invalid' });
+
   const db = await readDB();
-  const exists = !!db.creators?.[handle];
-  return res.status(200).json({ available: !exists });
+  const taken = !!db.creators?.[raw]?.wallet; // belegt, wenn Wallet gebunden
+  return res.json({ available: !taken });
 }

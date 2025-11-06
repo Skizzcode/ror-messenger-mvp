@@ -4,22 +4,86 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+/** Build short-lived auth headers from the connected wallet */
+async function buildAuthHeaders(wallet: any) {
+  if (!wallet?.publicKey || !wallet?.signMessage) return null;
+  const pub = wallet.publicKey.toBase58();
+  const msg = `ROR|auth|wallet=${pub}|ts=${Date.now()}`;
+  const enc = new TextEncoder().encode(msg);
+  const sig = await wallet.signMessage(enc);
+  const { default: bs58 } = await import('bs58');
+  return {
+    'x-wallet': pub,
+    'x-msg': msg,
+    'x-sig': bs58.encode(sig),
+  };
+}
 
 export default function CreatorDashboard({ handle }: { handle: string }) {
-  // load data
-  const { data: threads } = useSWR(`/api/creator-threads?handle=${handle}`, fetcher, { refreshInterval: 3000 });
-  const { data: settings, mutate: mutateSettings } = useSWR(`/api/creator-settings?handle=${handle}`, fetcher);
-  const { data: stats } = useSWR(`/api/creator-stats?handle=${handle}`, fetcher, { refreshInterval: 5000 });
+  const wallet = useWallet();
 
-  // local state
+  // signed headers (refresh every 60s)
+  const [authHeaders, setAuthHeaders] = useState<Record<string, string> | null>(null);
+  const [authReady, setAuthReady] = useState(false); // once tried to sign at least once
+
+  useEffect(() => {
+    let timer: any;
+    async function run() {
+      try {
+        if (!wallet.publicKey) {
+          setAuthHeaders(null);
+        } else {
+          const h = await buildAuthHeaders(wallet as any);
+          setAuthHeaders(h);
+        }
+      } catch (e) {
+        console.error('auth sign failed', e);
+        setAuthHeaders(null);
+      } finally {
+        setAuthReady(true);
+      }
+      timer = setTimeout(run, 60_000);
+    }
+    run();
+    return () => { if (timer) clearTimeout(timer); };
+  }, [wallet.publicKey]);
+
+  // SWR fetchers
+  const authedFetcher = useMemo(() => {
+    return async (url: string) => {
+      const r = await fetch(url, { headers: authHeaders || {} });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j?.error || `HTTP ${r.status}`);
+      }
+      return r.json();
+    };
+  }, [authHeaders]);
+
+  const publicFetcher = (url: string) => fetch(url).then(r => r.json());
+
+  // Data
+  const { data: threads, error: threadsErr } = useSWR(
+    () => (authHeaders ? `/api/creator-threads?handle=${handle}` : null),
+    authedFetcher,
+    { refreshInterval: 3000 }
+  );
+  const { data: settings, mutate: mutateSettings } = useSWR(
+    `/api/creator-settings?handle=${handle}`, // GET is public (price/name/avatar)
+    publicFetcher
+  );
+  const { data: stats, error: statsErr } = useSWR(
+    () => (authHeaders ? `/api/creator-stats?handle=${handle}` : null),
+    authedFetcher,
+    { refreshInterval: 5000 }
+  );
+
+  // local state from settings
   const [price, setPrice] = useState<number>(20);
   const [replyWindowHours, setReplyWindowHours] = useState<number>(48);
   const [displayName, setDisplayName] = useState<string>('');
   const [avatarDataUrl, setAvatarDataUrl] = useState<string>('');
   const [savingAvatar, setSavingAvatar] = useState(false);
-
-  const walletAdapter = useWallet();
 
   useEffect(() => {
     if (settings) {
@@ -45,29 +109,23 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const refLink = settings?.refCode ? `${baseUrl}/creator/join?ref=${settings.refCode}` : '';
 
-  // 🔥 new: referral stats via your refCode
+  // referral stats
   const { data: refStats } = useSWR(
-    () => (settings?.refCode ? `/api/ref-stats?code=${encodeURIComponent(settings.refCode)}` : null),
-    fetcher,
+    () => (settings?.refCode && authHeaders ? `/api/ref-stats?code=${encodeURIComponent(settings.refCode)}` : null),
+    authedFetcher,
     { refreshInterval: 10000 }
   );
 
   async function saveSettings(extra?: Record<string, any>) {
-    const body = {
-      handle,
-      price,
-      replyWindowHours,
-      displayName,
-      ...(extra || {}),
-    };
+    if (!authHeaders) { alert('Connect your creator wallet first.'); return; }
+    const body = { handle, price, replyWindowHours, displayName, ...(extra || {}) };
     const r = await fetch('/api/creator-settings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(authHeaders as any) },
       body: JSON.stringify(body),
     });
-    if (r.ok) {
-      mutateSettings();
-    } else {
+    if (r.ok) mutateSettings();
+    else {
       const j = await r.json().catch(() => ({}));
       alert(j?.error || 'Failed to save');
     }
@@ -87,9 +145,10 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
         setAvatarDataUrl(result);
         setSavingAvatar(true);
         try {
+          if (!authHeaders) { alert('Connect your creator wallet first.'); return; }
           const r = await fetch('/api/creator-settings', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(authHeaders as any) },
             body: JSON.stringify({
               handle,
               price,
@@ -117,11 +176,17 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
     const m = Math.floor((ms % 3600000) / 60000);
     return `${h}h ${m}m`;
   }
-
   function formatAmount(a: number | undefined) {
     const n = typeof a === 'number' ? a : 0;
     return `€${n.toFixed(2)}`;
   }
+
+  // Gate UI: if we tried auth & got 401/403, hint to connect correct wallet
+  const authError =
+    threadsErr?.message?.includes('Unauthorized') ||
+    threadsErr?.message?.includes('wallet') ||
+    statsErr?.message?.includes('Unauthorized') ||
+    statsErr?.message?.includes('wallet');
 
   return (
     <div className="min-h-screen bg-background text-white">
@@ -167,6 +232,12 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
           </div>
 
           {/* THREADS */}
+          {authReady && authError && (
+            <div className="p-3 rounded-xl border border-red-400/30 bg-red-400/10 text-sm">
+              Connect the creator wallet bound to @{handle} to view chats.
+            </div>
+          )}
+
           <Tabs
             tabs={[
               { key: 'open', label: 'Open', items: threads?.grouped?.open || [] },
@@ -181,11 +252,9 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                 <div>
                   <div className="flex items-center gap-2">
                     <div className="font-semibold">{t.id.slice(0, 8)}…</div>
-                    {/* amount badge */}
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10">
                       {formatAmount(t.amount)}
                     </span>
-                    {/* status badge */}
                     <span
                       className={
                         'text-[10px] px-2 py-0.5 rounded-full ' +
@@ -277,7 +346,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
             <button
               className="btn w-full"
               onClick={() => {
-                const pk = walletAdapter.publicKey?.toBase58();
+                const pk = wallet.publicKey?.toBase58();
                 if (!pk) {
                   alert('Connect a wallet in your browser first.');
                   return;
@@ -298,15 +367,13 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
             <div className="input break-all">{refLink || 'Loading…'}</div>
             <button
               className="btn w-full"
-              onClick={() => {
-                if (refLink) navigator.clipboard.writeText(refLink);
-              }}
+              onClick={() => { if (refLink) navigator.clipboard.writeText(refLink); }}
             >
               Copy link
             </button>
           </div>
 
-          {/* 🔥 Referrals card */}
+          {/* Referrals card */}
           <div className="card p-4 space-y-2">
             <div className="font-semibold">Referrals</div>
             {!settings?.refCode ? (
@@ -324,7 +391,6 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                 <div className="text-sm text-white/45">
                   Paid (answered only): <b>€{(refStats.totals?.revenueAnswered ?? 0).toFixed(2)}</b>
                 </div>
-
                 {Array.isArray(refStats.creators) && refStats.creators.length > 0 && (
                   <div className="text-xs text-white/45 pt-2">
                     Latest signups:
