@@ -5,53 +5,34 @@ import { touchExpiryForThread } from '../../lib/ttl';
 import { checkRequestAuth } from '../../lib/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const handle = (req.query.handle as string || '').trim().toLowerCase();
+  const handle = String(req.query.handle || '').trim().toLowerCase();
   if (!handle) return res.status(400).json({ error: 'Missing handle' });
 
-  // 🔐 Require signed auth headers
+  // 🔒 Auth & Owner-Gate
   const auth = checkRequestAuth(req);
-  if (!auth.ok) return res.status(401).json({ error: auth.error || 'Unauthorized' });
+  if (!auth.ok) return res.status(401).json({ error: auth.error });
 
-  // DB lesen
   const db = await readDB();
-  const creatorEntry = (db.creators || {})[handle];
-
-  // Creator existiert und muss Wallet gebunden haben
-  if (!creatorEntry?.wallet) {
-    return res.status(403).json({ error: 'Creator wallet not set. Bind your wallet in settings first.' });
+  const creator = (db.creators || {})[handle];
+  if (!creator || !creator.wallet) {
+    return res.status(404).json({ error: 'Creator not found' });
   }
-  // Wallet muss matchen
-  if (creatorEntry.wallet !== auth.wallet) {
-    return res.status(403).json({ error: 'Forbidden (wallet mismatch)' });
+  if (creator.wallet !== auth.wallet) {
+    return res.status(403).json({ error: 'Forbidden (wrong wallet)' });
   }
 
-  // Threads des Creators
-  const allThreads = Object.values<any>(db.threads || {}).filter(
-    (t: any) => t?.creator === handle
-  );
+  const allThreads = Object.values<any>(db.threads || {}).filter((t: any) => t?.creator === handle);
 
-  // Lazy TTL (open → ggf. refunded)
   for (const t of allThreads) {
     try { await touchExpiryForThread(t.id); } catch {}
   }
 
-  // Nach evtl. Status-Updates erneut lesen
   const db2 = await readDB();
-
-  // Creator-Profil beilegen (für UI)
-  const creatorProfile = {
-    handle: creatorEntry.handle,
-    displayName: creatorEntry.displayName || creatorEntry.handle || handle,
-    avatarDataUrl: creatorEntry.avatarDataUrl || null,
-    price: typeof creatorEntry.price === 'number' ? creatorEntry.price : 20,
-  };
-
   const withDerived = allThreads.map((t: any) => {
-    const msgs = db2.messages?.[t.id] || [];
+    const msgs = (db2.messages?.[t.id] || []);
     const now = Date.now();
     const remainingMs = Math.max(0, (t.deadline ?? 0) - now);
     const latest = db2.threads?.[t.id] || t;
-
     return {
       id: t.id,
       status: latest.status,
@@ -62,7 +43,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       fanPubkey: t.fan_pubkey || null,
       messagesCount: msgs.length,
       lastMessageAt: msgs.length ? msgs[msgs.length - 1].ts : null,
-      creatorProfile,
+      creatorProfile: {
+        handle: creator.handle,
+        displayName: creator.displayName || creator.handle,
+        avatarDataUrl: creator.avatarDataUrl || null,
+        price: typeof creator.price === 'number' ? creator.price : 20,
+      },
     };
   });
 

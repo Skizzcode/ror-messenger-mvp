@@ -6,7 +6,6 @@ import { checkRequestAuth } from '../../lib/auth';
 function ensureCreatorsMap(db: DB) {
   db.creators = db.creators || {};
 }
-
 function ensureCreator(db: DB, handle: string) {
   ensureCreatorsMap(db);
   if (!db.creators[handle]) {
@@ -19,8 +18,6 @@ function ensureCreator(db: DB, handle: string) {
       displayName: '',
       avatarDataUrl: '',
       referredBy: null,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
     };
   }
   return db.creators[handle];
@@ -38,89 +35,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const db = await readDB();
   const creator = ensureCreator(db as DB, handle);
 
-  // GET ist öffentlich (für Landing/Chat)
   if (req.method === 'GET') {
-    return res.json(creator);
+    // Public subset (no wallet leak)
+    return res.json({
+      handle: creator.handle,
+      displayName: creator.displayName || '',
+      avatarDataUrl: creator.avatarDataUrl || '',
+      price: creator.price ?? 20,
+      refCode: creator.refCode || null,
+      replyWindowHours: creator.replyWindowHours ?? 48,
+    });
   }
 
-  // POST erfordert Wallet-Signatur
   if (req.method === 'POST') {
+    // 🔒 Owner-Gate (or first bind)
     const auth = checkRequestAuth(req);
-    if (!auth.ok) return res.status(401).json({ error: auth.error || 'Unauthorized' });
+    if (!auth.ok) return res.status(401).json({ error: auth.error });
 
-    // Falls noch keine Wallet gebunden: erste gültige Signatur bindet den Owner
+    // First bind: if no wallet set yet, bind to signer wallet
     if (!creator.wallet) {
       creator.wallet = auth.wallet!;
-    }
-
-    // Nur der gebundene Owner darf schreiben
-    if (creator.wallet !== auth.wallet) {
-      return res.status(403).json({ error: 'Forbidden (wallet mismatch)' });
+    } else if (creator.wallet !== auth.wallet) {
+      return res.status(403).json({ error: 'Forbidden: wrong wallet' });
     }
 
     const {
       price,
       replyWindowHours,
-      wallet,          // optional: falls Client explizit die gleiche Wallet mitschickt
       displayName,
       avatarDataUrl,
-      referredBy,      // nur beim ersten Mal setzbar
+      referredBy,
+      wallet, // optional "Use connected wallet" button
     } = (req.body ?? {}) as {
       price?: number | string;
       replyWindowHours?: number | string;
-      wallet?: string | null;
       displayName?: string;
       avatarDataUrl?: string;
       referredBy?: string | null;
+      wallet?: string | null;
     };
 
-    // Preis & Reply-Window (mit minimalen Schranken)
-    if (price !== undefined) {
-      const p = Math.max(1, Number(price) || 0);
-      creator.price = p;
-    }
-    if (replyWindowHours !== undefined) {
-      const r = Math.max(1, Number(replyWindowHours) || 1);
-      creator.replyWindowHours = r;
+    if (price !== undefined) creator.price = Number(price) || 0;
+    if (replyWindowHours !== undefined) creator.replyWindowHours = Number(replyWindowHours) || 48;
+    if (typeof displayName === 'string') creator.displayName = displayName.trim();
+
+    if (typeof avatarDataUrl === 'string' && avatarDataUrl.startsWith('data:image/')) {
+      const approxSize = avatarDataUrl.length * 0.75;
+      if (approxSize < 500 * 1024) creator.avatarDataUrl = avatarDataUrl;
     }
 
-    // Wallet darf nur gesetzt werden, wenn sie der signierenden Wallet entspricht
-    if (wallet !== undefined) {
-      if (wallet && wallet !== auth.wallet) {
-        return res.status(403).json({ error: 'Wallet must match signed wallet' });
+    // Allow explicitly updating wallet to current signer (safety: must equal auth.wallet)
+    if (typeof wallet === 'string' && wallet) {
+      if (wallet !== auth.wallet) {
+        return res.status(403).json({ error: 'Forbidden: wallet mismatch' });
       }
-      // explizites Unbinden verhindern (MVP)
-      creator.wallet = auth.wallet!;
+      creator.wallet = wallet;
     }
 
-    // Display-Name
-    if (typeof displayName === 'string') {
-      creator.displayName = displayName.trim().slice(0, 120);
-    }
-
-    // Avatar als Data-URL (kleine Größenbremse)
-    if (typeof avatarDataUrl === 'string') {
-      if (avatarDataUrl.startsWith('data:image/')) {
-        const approxSize = Math.floor(avatarDataUrl.length * 0.75); // grob
-        if (approxSize <= 500 * 1024) {
-          creator.avatarDataUrl = avatarDataUrl;
-        } else {
-          return res.status(400).json({ error: 'Avatar too large (max ~500KB)' });
-        }
-      } else if (avatarDataUrl === '') {
-        // leeren String erlauben → bedeutet "entfernen"
-        creator.avatarDataUrl = '';
-      }
-    }
-
-    // ReferredBy nur beim ersten Mal setzen
-    if (!creator.referredBy && typeof referredBy === 'string' && referredBy.trim()) {
+    // Only-first-write for referredBy
+    if (!creator.referredBy && typeof referredBy === 'string' && referredBy.trim().length > 0) {
       creator.referredBy = referredBy.trim();
     }
 
-    creator.updatedAt = Date.now();
     await writeDB(db);
-    return res.json({ ok: true, settings: creator });
+    return res.json({ ok: true, settings: {
+      handle: creator.handle,
+      displayName: creator.displayName,
+      avatarDataUrl: creator.avatarDataUrl,
+      price: creator.price,
+      refCode: creator.refCode,
+      replyWindowHours: creator.replyWindowHours,
+      wallet: creator.wallet, // returned to client (owner sees his own)
+    }});
   }
 
   return res.status(405).end();
