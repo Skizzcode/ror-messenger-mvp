@@ -27,7 +27,10 @@ async function buildAuthHeaders(wallet: any) {
   };
 }
 
-const fetchPublic = (url: string) => fetch(url).then(r => r.json());
+const fetchJSON = (url: string, init?: RequestInit) => fetch(url, init).then(r => {
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+});
 
 export default function CreatorDashboard({ handle }: { handle: string }) {
   const wallet = useWallet();
@@ -66,35 +69,33 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
     return () => { if (timer) clearTimeout(timer); };
   }, [wallet.publicKey, handle]);
 
-  // fetchers
-  const authedFetcher = useMemo(() => {
-    return async (url: string) => {
-      const r = await fetch(url, { headers: authHeaders || {} });
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j?.error || `HTTP ${r.status}`);
-      }
-      return r.json();
-    };
-  }, [authHeaders]);
+  // --- NEU: AuthZ-Abfrage (hartes Gate) ---
+  const { data: authz, error: authzErr } = useSWR(
+    () => (authHeaders ? `/api/creator-authz?handle=${encodeURIComponent(handle)}` : null),
+    (url: string) => fetchJSON(url, { headers: authHeaders || {} }),
+    { refreshInterval: 60_000 }
+  );
+  const authorized = !!authz?.ok;
 
-  // Data
-  const { data: threads, error: threadsErr } = useSWR(
-    () => (authHeaders ? `/api/creator-threads?handle=${handle}` : null),
+  // fetchers nur starten, wenn authorized
+  const authedFetcher = (url: string) => fetchJSON(url, { headers: authHeaders || {} });
+
+  const { data: threads } = useSWR(
+    () => (authorized ? `/api/creator-threads?handle=${handle}` : null),
     authedFetcher,
     { refreshInterval: 3000 }
   );
-  const { data: settings, mutate: mutateSettings } = useSWR(
-    `/api/creator-settings?handle=${handle}`, // public: Price/Name/Avatar
-    fetchPublic
-  );
-  const { data: stats, error: statsErr } = useSWR(
-    () => (authHeaders ? `/api/creator-stats?handle=${handle}` : null),
+  const { data: stats } = useSWR(
+    () => (authorized ? `/api/creator-stats?handle=${handle}` : null),
     authedFetcher,
     { refreshInterval: 5000 }
   );
+  const { data: settings, mutate: mutateSettings } = useSWR(
+    () => (authorized ? `/api/creator-settings?handle=${handle}` : null), // öffentliches GET, aber wir laden es erst NACH Auth
+    fetchJSON
+  );
 
-  // local state from settings
+  // lokale Settings-States
   const [price, setPrice] = useState<number>(20);
   const [replyWindowHours, setReplyWindowHours] = useState<number>(48);
   const [displayName, setDisplayName] = useState<string>('');
@@ -102,7 +103,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   const [savingAvatar, setSavingAvatar] = useState(false);
 
   useEffect(() => {
-    if (settings) {
+    if (authorized && settings) {
       setPrice(settings.price ?? 20);
       setReplyWindowHours(settings.replyWindowHours ?? 48);
       setDisplayName(settings.displayName ?? '');
@@ -117,32 +118,31 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
         }
       });
     }
-  }, [settings, handle]);
+  }, [authorized, settings, handle]);
 
   // totals
   const totals = useMemo(() => {
-    const g = threads?.grouped;
+    const g = threads?.grouped || {};
     return {
-      open: g?.open?.length || 0,
-      answered: g?.answered?.length || 0,
-      refunded: g?.refunded?.length || 0,
-      all: g?.all?.length || 0,
+      open: g.open?.length || 0,
+      answered: g.answered?.length || 0,
+      refunded: g.refunded?.length || 0,
+      all: g.all?.length || 0,
     };
   }, [threads]);
 
-  // referral link
+  // referral link (nur anzeigen, wenn authorized)
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const refLink = settings?.refCode ? `${baseUrl}/creator/join?ref=${settings.refCode}` : '';
+  const refLink = authorized && settings?.refCode ? `${baseUrl}/creator/join?ref=${settings.refCode}` : '';
 
-  // referral stats
   const { data: refStats } = useSWR(
-    () => (settings?.refCode && authHeaders ? `/api/ref-stats?code=${encodeURIComponent(settings.refCode)}` : null),
+    () => (authorized && settings?.refCode ? `/api/ref-stats?code=${encodeURIComponent(settings.refCode)}` : null),
     authedFetcher,
     { refreshInterval: 10000 }
   );
 
   async function saveSettings(extra?: Record<string, any>) {
-    if (!authHeaders) { alert('Connect your creator wallet first.'); return; }
+    if (!authorized || !authHeaders) { alert('Connect your creator wallet first.'); return; }
     const body = { handle, price, replyWindowHours, displayName, ...(extra || {}) };
     t('creator_settings_save_attempt', { scope: 'creator_dashboard', props: { handle } });
     const r = await fetch('/api/creator-settings', {
@@ -161,6 +161,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   }
 
   async function onAvatarFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!authorized) return;
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 1_000_000) {
@@ -213,16 +214,10 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
     return `€${n.toFixed(2)}`;
   }
 
-  // Gate UI hint
-  const authError =
-    threadsErr?.message?.includes('Unauthorized') ||
-    threadsErr?.message?.includes('wallet') ||
-    statsErr?.message?.includes('Unauthorized') ||
-    statsErr?.message?.includes('wallet');
-
+  // ---------- RENDER ----------
   return (
     <div className="min-h-screen bg-background text-white">
-      {/* === GLOBAL HEADER (wie auf Index): Logo + Wallet Connect === */}
+      {/* GLOBAL HEADER */}
       <header className="sticky top-0 z-30 bg-background/60 backdrop-blur border-b border-white/10">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2 group">
@@ -241,239 +236,243 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
         </div>
       </header>
 
-      {/* === DASHBOARD HEADER === */}
-      <header className="z-20 bg-background/60 backdrop-blur border-b border-white/10">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <img
-              src={avatarDataUrl || '/logo-ror-glass.svg'}
-              className="h-10 w-10 rounded-2xl border border-white/10 object-cover"
-              alt="Creator avatar"
-            />
-            <div>
-              <div className="font-black text-lg">
-                {displayName ? displayName : `@${handle}`}
+      {/* HARTES GATE – wenn nicht autorisiert */}
+      {!authorized ? (
+        <main className="max-w-5xl mx-auto px-4 py-16">
+          <div className="max-w-lg mx-auto card p-6 text-center">
+            <div className="text-lg font-semibold mb-1">Creator dashboard</div>
+            <div className="text-sm text-white/60">
+              Connect the creator wallet bound to <b>@{handle}</b> to view chats and settings.
+            </div>
+            <div className="text-xs text-white/40 mt-2">
+              We verify a short-lived signed header. If the wallet doesn’t match, access is blocked.
+            </div>
+            <div className="mt-6">
+              <WalletMultiButtonDynamic className="!bg-white !text-black !rounded-2xl !h-9 !px-4 !py-0 !text-sm !shadow" />
+            </div>
+            {/* Auth-Fehler (dezent) */}
+            {authReady && authzErr && (
+              <div className="mt-4 text-[11px] text-red-300/80">
+                Access denied. Make sure you’re connected with the bound creator wallet.
               </div>
-              <div className="text-xs text-white/35">Creator dashboard</div>
-            </div>
+            )}
           </div>
-          <div className="text-sm text-white/40">@{handle}</div>
-        </div>
-      </header>
-
-      {/* MAIN */}
-      <main className="max-w-5xl mx-auto px-4 py-6 grid gap-6 md:grid-cols-3">
-        {/* LEFT */}
-        <section className="md:col-span-2 space-y-6">
-          {/* STATS */}
-          <div className="grid grid-cols-4 gap-3">
-            <div className="p-3 rounded-xl border border-white/10 col-span-4 md:col-span-2 bg-white/5">
-              <div className="text-xs text-white/40">Earnings (MTD)</div>
-              <div className="text-2xl font-bold">€{(stats?.revenue?.mtd ?? 0).toFixed(2)}</div>
-              <div className="text-xs text-white/40 mt-1">
-                All-time: €{(stats?.revenue?.allTime ?? 0).toFixed(2)}
-              </div>
-            </div>
-            <Stat label="Open" value={threads?.grouped?.open?.length || 0} />
-            <Stat label="Answered" value={threads?.grouped?.answered?.length || 0} />
-            <Stat label="Refunded" value={threads?.grouped?.refunded?.length || 0} />
-            <Stat label="All" value={threads?.grouped?.all?.length || 0} />
-          </div>
-
-          {/* AUTH HINT */}
-          {authReady && authError && (
-            <div className="p-3 rounded-xl border border-red-400/30 bg-red-400/10 text-sm">
-              Connect the creator wallet bound to @{handle} to view chats.
-            </div>
-          )}
-
-          {/* THREADS */}
-          <Tabs
-            tabs={[
-              { key: 'open', label: 'Open', items: threads?.grouped?.open || [] },
-              { key: 'answered', label: 'Answered', items: threads?.grouped?.answered || [] },
-              { key: 'refunded', label: 'Refunded', items: threads?.grouped?.refunded || [] },
-            ]}
-            renderItem={(tItem: any) => (
-              <div
-                key={tItem.id}
-                className="p-3 rounded-xl border border-white/10 flex items-center justify-between bg-white/5"
-              >
+        </main>
+      ) : (
+        <>
+          {/* DASHBOARD HEADER – zeigt erst NACH Auth Name/Avatar */}
+          <header className="z-20 bg-background/60 backdrop-blur border-b border-white/10">
+            <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <img
+                  src={avatarDataUrl || '/logo-ror-glass.svg'}
+                  className="h-10 w-10 rounded-2xl border border-white/10 object-cover"
+                  alt="Creator avatar"
+                />
                 <div>
-                  <div className="flex items-center gap-2">
-                    <div className="font-semibold">{tItem.id.slice(0, 8)}…</div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10">
-                      {formatAmount(tItem.amount)}
-                    </span>
-                    <span
-                      className={
-                        'text-[10px] px-2 py-0.5 rounded-full ' +
-                        (tItem.status === 'open'
-                          ? 'bg-emerald-400/10 text-emerald-50 border border-emerald-400/40'
-                          : tItem.status === 'answered'
-                          ? 'bg-white/10 text-white/80 border border-white/15'
-                          : 'bg-red-400/10 text-red-50 border border-red-400/25')
-                      }
+                  <div className="font-black text-lg">
+                    {displayName ? displayName : `@${handle}`}
+                  </div>
+                  <div className="text-xs text-white/35">Creator dashboard</div>
+                </div>
+              </div>
+              <div className="text-sm text-white/40">@{handle}</div>
+            </div>
+          </header>
+
+          {/* MAIN (nur bei authorized) */}
+          <main className="max-w-5xl mx-auto px-4 py-6 grid gap-6 md:grid-cols-3">
+            {/* LEFT */}
+            <section className="md:col-span-2 space-y-6">
+              {/* STATS */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl border border-white/10 col-span-4 md:col-span-2 bg-white/5">
+                  <div className="text-xs text-white/40">Earnings (MTD)</div>
+                  <div className="text-2xl font-bold">€{(stats?.revenue?.mtd ?? 0).toFixed(2)}</div>
+                  <div className="text-xs text-white/40 mt-1">
+                    All-time: €{(stats?.revenue?.allTime ?? 0).toFixed(2)}
+                  </div>
+                </div>
+                <Stat label="Open" value={totals.open} />
+                <Stat label="Answered" value={totals.answered} />
+                <Stat label="Refunded" value={totals.refunded} />
+                <Stat label="All" value={totals.all} />
+              </div>
+
+              {/* THREADS */}
+              <Tabs
+                tabs={[
+                  { key: 'open', label: 'Open', items: threads?.grouped?.open || [] },
+                  { key: 'answered', label: 'Answered', items: threads?.grouped?.answered || [] },
+                  { key: 'refunded', label: 'Refunded', items: threads?.grouped?.refunded || [] },
+                ]}
+                renderItem={(tItem: any) => (
+                  <div
+                    key={tItem.id}
+                    className="p-3 rounded-xl border border-white/10 flex items-center justify-between bg-white/5"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold">{tItem.id.slice(0, 8)}…</div>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10">
+                          {`€${Number(tItem.amount || 0).toFixed(2)}`}
+                        </span>
+                        <span
+                          className={
+                            'text-[10px] px-2 py-0.5 rounded-full ' +
+                            (tItem.status === 'open'
+                              ? 'bg-emerald-400/10 text-emerald-50 border border-emerald-400/40'
+                              : tItem.status === 'answered'
+                              ? 'bg-white/10 text-white/80 border border-white/15'
+                              : 'bg-red-400/10 text-red-50 border border-red-400/25')
+                          }
+                        >
+                          {tItem.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="text-xs text-white/40">
+                        {tItem.messagesCount} msgs
+                        {tItem.status === 'open' && <> · ⏳ {formatRemaining(tItem.remainingMs)} left</>}
+                        {tItem.fanPubkey ? <> · fan: {tItem.fanPubkey.slice(0, 6)}…</> : null}
+                      </div>
+                    </div>
+                    <Link
+                      href={`/c/${tItem.id}`}
+                      className="btn"
+                      onClick={() => t('creator_open_chat_click', { scope: 'creator_dashboard', props: { threadId: tItem.id } })}
                     >
-                      {tItem.status.toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="text-xs text-white/40">
-                    {tItem.messagesCount} msgs
-                    {tItem.status === 'open' && <> · ⏳ {formatRemaining(tItem.remainingMs)} left</>}
-                    {tItem.fanPubkey ? <> · fan: {tItem.fanPubkey.slice(0, 6)}…</> : null}
-                  </div>
-                </div>
-                <Link
-                  href={`/c/${tItem.id}`}
-                  className="btn"
-                  onClick={() => t('creator_open_chat_click', { scope: 'creator_dashboard', props: { threadId: tItem.id } })}
-                >
-                  Open chat
-                </Link>
-              </div>
-            )}
-          />
-        </section>
-
-        {/* RIGHT */}
-        <aside className="space-y-6">
-          {/* Profile & settings */}
-          <div className="card p-4 space-y-3">
-            <div className="font-semibold">Profile</div>
-
-            <label className="text-sm text-white/50">Display name</label>
-            <input
-              className="input"
-              placeholder="Your public name"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-            />
-
-            <label className="text-sm text-white/50">Avatar (upload)</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={onAvatarFileSelected}
-              className="text-xs text-white/50"
-            />
-            {savingAvatar && <div className="text-[11px] text-white/40">Uploading…</div>}
-            {avatarDataUrl ? (
-              <img
-                src={avatarDataUrl}
-                alt="avatar"
-                className="h-12 w-12 rounded-full border border-white/10 object-cover"
-              />
-            ) : (
-              <div className="text-[11px] text-white/30">No avatar yet. Upload a small image.</div>
-            )}
-
-            <div className="h-px bg-white/10" />
-
-            <div className="font-semibold">Chat settings</div>
-            <label className="text-sm text-white/50">Price (EUR / USDC equiv.)</label>
-            <input
-              className="input"
-              type="number"
-              min={1}
-              value={price}
-              onChange={(e) => setPrice(Number(e.target.value))}
-            />
-
-            <label className="text-sm text-white/50">Reply window (hours)</label>
-            <input
-              className="input"
-              type="number"
-              min={1}
-              value={replyWindowHours}
-              onChange={(e) => setReplyWindowHours(Number(e.target.value))}
-            />
-
-            <button className="btn w-full" onClick={() => saveSettings()}>
-              Save
-            </button>
-
-            <button
-              className="btn w-full"
-              onClick={() => {
-                const pk = wallet.publicKey?.toBase58();
-                if (!pk) {
-                  alert('Connect a wallet in your browser first.');
-                  return;
-                }
-                t('creator_use_connected_wallet', { scope: 'creator_dashboard', props: { handle } });
-                saveSettings({ wallet: pk });
-              }}
-            >
-              Use connected wallet
-            </button>
-          </div>
-
-          {/* referral */}
-          <div className="card p-4 space-y-3 relative">
-            <div className="font-semibold">Invite another creator</div>
-            <p className="text-sm text-white/45">
-              Share this link. Other creators will start onboarding with your referral code.
-            </p>
-            <div className="input break-all">{refLink || 'Loading…'}</div>
-            <button
-              className="btn w-full"
-              onClick={() => {
-                if (refLink) {
-                  navigator.clipboard.writeText(refLink);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1600);
-                  t('ref_share_click', { scope: 'creator_dashboard', props: { handle } });
-                }
-              }}
-            >
-              Copy link
-            </button>
-            {copied && (
-              <div className="absolute -top-2 right-3 text-[11px] px-2 py-1 rounded-md bg-white text-black shadow">
-                Copied
-              </div>
-            )}
-          </div>
-
-          {/* Referrals card */}
-          <div className="card p-4 space-y-2">
-            <div className="font-semibold">Referrals</div>
-            {!settings?.refCode ? (
-              <div className="text-sm text-white/45">Generating code…</div>
-            ) : !refStats ? (
-              <div className="text-sm text-white/45">Loading…</div>
-            ) : (
-              <>
-                <div className="text-sm">
-                  <b>{refStats.creatorsCount}</b> creators joined via your link
-                </div>
-                <div className="text-sm text-white/45">
-                  GMV (all chats by referred creators): <b>€{(refStats.totals?.revenueAll ?? 0).toFixed(2)}</b>
-                </div>
-                <div className="text-sm text-white/45">
-                  Paid (answered only): <b>€{(refStats.totals?.revenueAnswered ?? 0).toFixed(2)}</b>
-                </div>
-
-                {Array.isArray(refStats.creators) && refStats.creators.length > 0 && (
-                  <div className="text-xs text-white/45 pt-2">
-                    Latest signups:
-                    <ul className="list-disc pl-5 mt-1 space-y-1">
-                      {refStats.creators.slice(0, 5).map((c: any) => (
-                        <li key={c.handle}>
-                          <Link className="underline" href={`/creator/${c.handle}`}>
-                            {c.displayName} (@{c.handle})
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
+                      Open chat
+                    </Link>
                   </div>
                 )}
-              </>
-            )}
-          </div>
-        </aside>
-      </main>
+              />
+            </section>
+
+            {/* RIGHT */}
+            <aside className="space-y-6">
+              {/* Profile & settings */}
+              <div className="card p-4 space-y-3">
+                <div className="font-semibold">Profile</div>
+
+                <label className="text-sm text-white/50">Display name</label>
+                <input
+                  className="input"
+                  placeholder="Your public name"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                />
+
+                <label className="text-sm text-white/50">Avatar (upload)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={onAvatarFileSelected}
+                  className="text-xs text-white/50"
+                />
+                {savingAvatar && <div className="text-[11px] text-white/40">Uploading…</div>}
+                {avatarDataUrl ? (
+                  <img
+                    src={avatarDataUrl}
+                    alt="avatar"
+                    className="h-12 w-12 rounded-full border border-white/10 object-cover"
+                  />
+                ) : (
+                  <div className="text-[11px] text-white/30">No avatar yet. Upload a small image.</div>
+                )}
+
+                <div className="h-px bg-white/10" />
+
+                <div className="font-semibold">Chat settings</div>
+                <label className="text-sm text-white/50">Price (EUR / USDC equiv.)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={price}
+                  onChange={(e) => setPrice(Number(e.target.value))}
+                />
+
+                <label className="text-sm text-white/50">Reply window (hours)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={replyWindowHours}
+                  onChange={(e) => setReplyWindowHours(Number(e.target.value))}
+                />
+
+                <button className="btn w-full" onClick={() => saveSettings()}>
+                  Save
+                </button>
+
+                <button
+                  className="btn w-full"
+                  onClick={() => {
+                    const pk = wallet.publicKey?.toBase58();
+                    if (!pk) {
+                      alert('Connect a wallet in your browser first.');
+                      return;
+                    }
+                    t('creator_use_connected_wallet', { scope: 'creator_dashboard', props: { handle } });
+                    saveSettings({ wallet: pk });
+                  }}
+                >
+                  Use connected wallet
+                </button>
+              </div>
+
+              {/* referral */}
+              <div className="card p-4 space-y-3 relative">
+                <div className="font-semibold">Invite another creator</div>
+                <p className="text-sm text-white/45">
+                  Share this link. Other creators will start onboarding with your referral code.
+                </p>
+                <div className="input break-all">{refLink || 'Loading…'}</div>
+                <button
+                  className="btn w-full"
+                  onClick={() => {
+                    if (refLink) {
+                      navigator.clipboard.writeText(refLink);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1600);
+                      t('ref_share_click', { scope: 'creator_dashboard', props: { handle } });
+                    }
+                  }}
+                >
+                  Copy link
+                </button>
+                {copied && (
+                  <div className="absolute -top-2 right-3 text-[11px] px-2 py-1 rounded-md bg-white text-black shadow">
+                    Copied
+                  </div>
+                )}
+              </div>
+
+              {/* Referrals card */}
+              <div className="card p-4 space-y-2">
+                <div className="font-semibold">Referrals</div>
+                {!settings?.refCode ? (
+                  <div className="text-sm text-white/45">Generating code…</div>
+                ) : !refStats ? (
+                  <div className="text-sm text-white/45">Loading…</div>
+                ) : (
+                  <>
+                    <div className="text-sm">
+                      <b>{refStats.creatorsCount}</b> creators joined via your link
+                    </div>
+                    <div className="text-sm text-white/45">
+                      GMV (all chats by referred creators): <b>€{(refStats.totals?.revenueAll ?? 0).toFixed(2)}</b>
+                    </div>
+                    <div className="text-sm text-white/45">
+                      Paid (answered only): <b>€{(refStats.totals?.revenueAnswered ?? 0).toFixed(2)}</b>
+                    </div>
+                  </>
+                )}
+              </div>
+            </aside>
+          </main>
+        </>
+      )}
     </div>
   );
 }
@@ -497,7 +496,6 @@ function Tabs({
   const [active, setActive] = useState(tabs[0]?.key || 'open');
   const items = tabs.find((t) => t.key === active)?.items || [];
   useEffect(() => {
-    // telemetry tab switch
     t('creator_tab_switch', { scope: 'creator_dashboard', props: { tab: active } });
   }, [active]);
 
