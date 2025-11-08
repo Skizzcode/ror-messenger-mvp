@@ -1,96 +1,124 @@
 // pages/api/create-thread.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { readDB, writeDB, uid } from '../../lib/db';
-import { initEscrow } from '../../lib/escrow';
-import { sha256Base58Server, verifyDetachedSig, extractTs } from '../../lib/verify';
+import { readDB, writeDB } from '../../lib/db';
+import * as Verify from '../../lib/verify';
+import { apiErr, apiOk } from '../../lib/api';
+import { track } from '../../lib/telemetry';
+
+const DRIFT_MS = 5 * 60 * 1000; // ±5 Minuten
+
+async function verifySig(params: { msg: string; sigBase58: string; pubkeyBase58: string }) {
+  const v: any = Verify;
+  const candidates = [
+    v.verifyServerSignature,
+    v.verifySignature,
+    v.verify,
+    v.default?.verifyServerSignature,
+    v.default?.verifySignature,
+    v.default?.verify,
+  ].filter((fn) => typeof fn === 'function');
+
+  for (const fn of candidates) {
+    try {
+      const res = await fn(params);
+      if (typeof res === 'boolean') return res;
+    } catch {
+      // versuche nächsten Kandidaten
+    }
+  }
+  throw new Error('VERIFY_FN_NOT_FOUND');
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).end();
-
-  const {
-    creator,
-    fan,
-    // amount is IGNORED now (authoritative = creator settings)
-    ttlHours = 48,
-    firstMessage,
-    fanPubkey,
-    creatorPubkey = null,
-    // signing fields
-    sigBase58,
-    msg,
-    pubkeyBase58,
-    // optional: marketing ref from URL (fan ref)
-    ref,
-  } = req.body || {};
-
-  if (!creator || !fan || !firstMessage) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-  if (!fanPubkey) return res.status(400).json({ error: 'Wallet required' });
-  if (!sigBase58 || !msg || !pubkeyBase58) {
-    return res.status(400).json({ error: 'Signature required' });
-  }
-  if (pubkeyBase58 !== fanPubkey) {
-    return res.status(403).json({ error: 'Signature wallet mismatch' });
-  }
-
-  const bodyhash = sha256Base58Server(firstMessage);
-  const expectedPrefix =
-    `ROR|create-thread|creator=${creator}|fan=${fanPubkey}|bodyhash=${bodyhash}|ttl=${ttlHours}|ts=`;
-  if (!msg.startsWith(expectedPrefix)) {
-    return res.status(400).json({ error: 'Invalid message payload' });
-  }
-  const ts = extractTs(msg);
-  if (!ts || Math.abs(Date.now() - ts) > 5 * 60 * 1000) {
-    return res.status(400).json({ error: 'Expired/invalid timestamp' });
-  }
-  if (!verifyDetachedSig(msg, sigBase58, pubkeyBase58)) {
-    return res.status(400).json({ error: 'Invalid signature' });
-  }
-
-  // DB
-  const db = await readDB();
-  db.threads = db.threads || {};
-  db.messages = db.messages || {};
-  db.escrows  = db.escrows  || {};
-  db.creators = db.creators || {};
-
-  // authoritative price from creator settings
-  const creatorEntry = db.creators[creator] || null;
-  const priceFromCreator = Math.max(1, Number(creatorEntry?.price ?? 20));
-  const referredByCreatorCode = creatorEntry?.referredBy || null;
-  const creatorDisplayName = creatorEntry?.displayName || null;
-  const creatorAvatar = creatorEntry?.avatarDataUrl || null;
-
-  const id = uid();
-  const now = Date.now();
-
-  db.threads[id] = {
-    id,
-    creator,
-    fan,
-    amount: priceFromCreator,
-    createdAt: now,
-    deadline: now + ttlHours * 3600 * 1000,
-    status: 'open',
-    fan_pubkey: fanPubkey,
-    creator_pubkey: creatorPubkey,
-    paid_via: 'wallet',
-    referredByCreatorCode,
-    creator_display_name: creatorDisplayName,
-    creator_avatar: creatorAvatar,
-    ref: ref || null,
-  };
-
-  db.messages[id] = [
-    { id: uid(), threadId: id, from: 'fan', body: firstMessage, ts: now }
-  ];
+  if (req.method !== 'POST') return apiErr(req, res, 405, 'METHOD_NOT_ALLOWED');
 
   try {
-    const esc = await initEscrow({ threadId: id, amount: priceFromCreator, deadlineMs: ttlHours * 3600 * 1000 });
-    db.escrows[id] = { status: esc.status, until: esc.until, source: 'wallet' };
-  } catch { /* ignore in MVP */ }
+    const {
+      creator,           // handle
+      fan,               // convenience display of fan (string)
+      amount,            // number
+      ttlHours,          // number
+      firstMessage,      // string
+      fanPubkey,         // string (wallet)
+      creatorPubkey,     // string | null
+      ref,               // referral code | null
+      sigBase58, msg, pubkeyBase58, // signature triple
+    } = req.body || {};
 
-  await writeDB(db);
-  return res.json({ threadId: id });
+    // Pflichtfelder prüfen
+    if (!creator || !fan || !amount || !ttlHours || !firstMessage || !sigBase58 || !msg || !pubkeyBase58) {
+      return apiErr(req, res, 400, 'BAD_REQUEST');
+    }
+
+    // Prefix prüfen
+    if (!String(msg).startsWith('ROR|create-thread|')) {
+      return apiErr(req, res, 400, 'BAD_PREFIX');
+    }
+
+    // Zeitdrift prüfen
+    const tsPart = String(msg).split('|').pop();
+    const ts = Number(tsPart?.includes('ts=') ? tsPart.split('ts=').pop() : tsPart);
+    if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > DRIFT_MS) {
+      return apiErr(req, res, 400, 'TS_DRIFT');
+    }
+
+    // Signatur prüfen
+    const ok = await verifySig({ msg, sigBase58, pubkeyBase58 });
+    if (!ok) return apiErr(req, res, 401, 'BAD_SIGNATURE');
+
+    // DB laden
+    const db = await readDB();
+
+    // IDs / Zeiten
+    const id = `t_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const createdAt = Date.now();
+    const deadline = createdAt + Number(ttlHours) * 3600_000;
+
+    // Sicherstellen, dass Strukturen existieren
+    db.threads = db.threads || {};
+    db.messages = db.messages || {};
+    db.escrows = db.escrows || {};
+
+    // Thread anlegen
+    db.threads[id] = {
+      id,
+      creator,
+      fan,
+      amount: Number(amount) || 20,
+      createdAt,
+      deadline,
+      status: 'open',
+      fan_pubkey: fanPubkey || pubkeyBase58,
+      creator_pubkey: creatorPubkey || null,
+      paid_via: 'wallet',
+      ref: ref || null,
+    };
+
+    // Erste Nachricht (Fan)
+    db.messages[id] = [
+      {
+        id: `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        threadId: id,
+        from: 'fan',
+        body: String(firstMessage),
+        ts: Date.now(),
+      },
+    ];
+
+    // Escrow-Stub (MVP, nicht on-chain)
+    db.escrows[id] = {
+      status: 'locked',
+      until: deadline,
+      source: 'wallet',
+    };
+
+    await writeDB(db);
+
+    // Telemetry
+    await track({ event: 'chat_started', scope: 'public', handle: creator, threadId: id });
+
+    return apiOk(res, { threadId: id });
+  } catch (e: any) {
+    return apiErr(req, res, 500, 'SERVER_ERROR', { detail: e?.message });
+  }
 }

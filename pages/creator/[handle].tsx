@@ -1,9 +1,16 @@
 // pages/creator/[handle].tsx
 import useSWR from 'swr';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { t } from '../../lib/telemetry';
+
+// Wallet-Button (client-only)
+const WalletMultiButtonDynamic = dynamic(
+  () => import('@solana/wallet-adapter-react-ui').then((m) => m.WalletMultiButton),
+  { ssr: false }
+);
 
 /** Build short-lived auth headers from the connected wallet */
 async function buildAuthHeaders(wallet: any) {
@@ -28,6 +35,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   // signed headers (refresh every 60s)
   const [authHeaders, setAuthHeaders] = useState<Record<string, string> | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [copied, setCopied] = useState(false); // referral copy toast
 
   useEffect(() => {
     t('page_view', { scope: 'creator_dashboard', props: { handle } });
@@ -214,8 +222,27 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
 
   return (
     <div className="min-h-screen bg-background text-white">
-      {/* HEADER */}
-      <header className="sticky top-0 z-10 bg-background/60 backdrop-blur border-b border-white/10">
+      {/* === GLOBAL HEADER (wie auf Index): Logo + Wallet Connect === */}
+      <header className="sticky top-0 z-30 bg-background/60 backdrop-blur border-b border-white/10">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <Link href="/" className="flex items-center gap-2 group">
+            <img
+              src="/logo-ror-glass.svg"
+              alt="RoR"
+              className="h-8 w-8 rounded-xl border border-white/10 object-contain"
+            />
+            <span className="font-bold tracking-tight group-hover:opacity-80 transition">
+              Reply or Refund
+            </span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <WalletMultiButtonDynamic className="!bg-white !text-black !rounded-2xl !h-8 !px-3 !py-0 !text-sm !shadow" />
+          </div>
+        </div>
+      </header>
+
+      {/* === DASHBOARD HEADER === */}
+      <header className="z-20 bg-background/60 backdrop-blur border-b border-white/10">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <img
@@ -383,7 +410,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
           </div>
 
           {/* referral */}
-          <div className="card p-4 space-y-3">
+          <div className="card p-4 space-y-3 relative">
             <div className="font-semibold">Invite another creator</div>
             <p className="text-sm text-white/45">
               Share this link. Other creators will start onboarding with your referral code.
@@ -394,12 +421,19 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
               onClick={() => {
                 if (refLink) {
                   navigator.clipboard.writeText(refLink);
-                  t('creator_copy_ref_link', { scope: 'creator_dashboard', props: { handle } });
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1600);
+                  t('ref_share_click', { scope: 'creator_dashboard', props: { handle } });
                 }
               }}
             >
               Copy link
             </button>
+            {copied && (
+              <div className="absolute -top-2 right-3 text-[11px] px-2 py-1 rounded-md bg-white text-black shadow">
+                Copied
+              </div>
+            )}
           </div>
 
           {/* Referrals card */}

@@ -3,22 +3,23 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB } from '../../lib/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const wallet = String(req.query.wallet || '').trim();
-  if (!wallet) return res.status(400).json({ error: 'Missing wallet' });
+  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
+  try {
+    const wallet = String(req.query.wallet || '').trim();
+    if (!wallet) return res.status(400).json({ ok: false, error: 'MISSING_WALLET' });
 
-  const db = await readDB();
-  const creators = db.creators || {};
+    const db = await readDB();
+    const creators = Object.values<any>(db.creators || {});
+    const found = creators.find((c: any) => c.wallet && c.wallet === wallet);
 
-  for (const [handle, c] of Object.entries<any>(creators)) {
-    if (c?.wallet && c.wallet === wallet) {
-      return res.json({
-        ok: true,
-        handle,
-        displayName: c.displayName || handle,
-        avatarDataUrl: c.avatarDataUrl || null,
-      });
-    }
+    if (!found) return res.status(200).json({ ok: false });
+    return res.status(200).json({
+      ok: true,
+      handle: found.handle,
+      displayName: found.displayName || found.handle,
+      avatarDataUrl: found.avatarDataUrl || null,
+    });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: 'SERVER_ERROR', detail: e?.message });
   }
-
-  return res.json({ ok: false, handle: null });
 }

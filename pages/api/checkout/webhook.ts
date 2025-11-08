@@ -1,94 +1,121 @@
 // pages/api/checkout/webhook.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getStripe, STRIPE_WEBHOOK_SECRET } from '../../../lib/stripe';
-import { readDB, writeDB, uid } from '../../../lib/db';
-import { initEscrow } from '../../../lib/escrow';
+import Stripe from 'stripe';
+import { readDB, writeDB } from '../../../lib/db';
+import { track } from '../../../lib/telemetry';
 
-export const config = {
-  api: { bodyParser: false } // wichtig: raw body für Stripe-Signatur
-};
+// Wichtig: Raw-Body für Stripe-Signatur
+export const config = { api: { bodyParser: false } };
 
-function buffer(readable: any): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    readable.on('data', (chunk: Buffer) =>
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-    );
-    readable.on('end', () => resolve(Buffer.concat(chunks)));
-    readable.on('error', reject);
-  });
+// Stripe-Client (ohne apiVersion -> nutzt die Lib-Default-Version; vermeidet TS-Konflikte)
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+
+// Hilfsfunktion: gesamten Request-Body in ein Buffer lesen (ohne 'micro')
+async function readRawBody(req: NextApiRequest): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  // @ts-ignore - req ist ein Readable
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).end();
-  const stripe = getStripe();
+  if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
-  // 1) Raw Body + Verify
-  const buf = await buffer(req);
-  const sig = req.headers['stripe-signature'] as string;
-  let event: any;
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+
+  let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(buf, sig, STRIPE_WEBHOOK_SECRET);
+    const raw = await readRawBody(req);
+    const sig = req.headers['stripe-signature'] as string | undefined;
+
+    if (endpointSecret && sig) {
+      // Verifizierter Webhook
+      event = stripe.webhooks.constructEvent(raw, sig, endpointSecret);
+    } else {
+      // Dev-Fallback (unsigniert)
+      event = JSON.parse(raw.toString());
+    }
   } catch (err: any) {
-    console.error('Webhook signature verify failed', err?.message);
-    return res.status(400).send(`Webhook Error: ${err?.message}`);
+    await track({
+      event: 'chat_started',
+      scope: 'system',
+      meta: { error: 'webhook_construct_failed', detail: err?.message },
+    });
+    return res.status(400).send(`Webhook Error: ${err?.message || 'invalid payload'}`);
   }
 
-  // 2) Handle event
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as any;
-    const md = session.metadata || {};
-    const creator = String(md.creator || 'unknown');
-    const amount = Number(md.amount || 20);
-    const ttlHours = Number(md.ttlHours || 48);
-    const firstMessage = String(md.firstMessage || '');
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
 
-    // ⬇️ async DB read
-    const db = await readDB();
+      // Erwartete Metadaten (vom Checkout erstellt)
+      const creator = (session.metadata?.creator_handle as string) || 'unknown';
+      const fan = (session.metadata?.fan_hint as string) || 'stripe_user';
+      const amount = (session.amount_total || 0) / 100;
+      const ttlHours = Number(session.metadata?.ttl_hours || 24);
+      const ref = session.metadata?.ref || null;
+      const firstMessage = session.metadata?.first_message;
 
-    // defensive init
-    db.threads = db.threads || {};
-    db.messages = db.messages || {};
-    db.escrows = db.escrows || {};
-    (db as any).checkouts = (db as any).checkouts || {};
+      const db = await readDB();
+      const id = `t_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      const now = Date.now();
+      const deadline = now + ttlHours * 60 * 60 * 1000;
 
-    // create thread
-    const threadId = uid();
-    const now = Date.now();
-    const fanId = `fan-stripe-${session.customer || session.customer_email || 'anon'}`;
+      if (!db.threads) db.threads = {} as any;
+      if (!db.messages) db.messages = {} as any;
+      if (!db.escrows) db.escrows = {} as any;
 
-    db.threads[threadId] = {
-      id: threadId,
-      creator,
-      fan: fanId,
-      amount,
-      createdAt: now,
-      deadline: now + ttlHours * 3600 * 1000,
-      status: 'open',
-      fan_pubkey: null,
-      creator_pubkey: null,
-      paid_via: 'stripe',
-      stripe_session_id: session.id
-    };
+      db.threads[id] = {
+        id,
+        creator,
+        fan,
+        amount,
+        createdAt: now,
+        deadline,
+        status: 'open',
+        paid_via: 'stripe',
+        ref,
+        fan_pubkey: null,      // Fan kann später Wallet binden
+        creator_pubkey: null,
+      };
 
-    db.messages[threadId] = [
-      { id: uid(), threadId, from: 'fan', body: firstMessage, ts: now }
-    ];
+      db.messages[id] = [];
+      if (firstMessage) {
+        db.messages[id].push({
+          id: `m_${now.toString(36)}`,
+          threadId: id,
+          from: 'fan',
+          body: String(firstMessage),
+          ts: now,
+        });
+      }
 
-    // escrow stub
-    try {
-      const esc = await initEscrow({ threadId, amount, deadlineMs: ttlHours * 3600 * 1000 });
-      db.escrows[threadId] = { status: esc.status, until: esc.until, source: 'stripe' };
-    } catch {
-      // ignore in MVP
+      db.escrows[id] = {
+        status: 'locked',
+        until: deadline,
+        source: 'stripe',
+      };
+
+      await writeDB(db);
+
+      await track({
+        event: 'chat_started',
+        scope: 'system',
+        handle: creator,
+        threadId: id,
+        meta: { paid_via: 'stripe', sessionId: (session.id as string) || null },
+      });
     }
 
-    // map checkout session -> thread
-    (db as any).checkouts[session.id] = { threadId, creator, amount, createdAt: now };
-
-    // ⬇️ async DB write
-    await writeDB(db);
+    return res.status(200).json({ received: true });
+  } catch (e: any) {
+    await track({
+      event: 'chat_started',
+      scope: 'system',
+      meta: { error: 'webhook_handler_failed', detail: e?.message },
+    });
+    return res.status(500).json({ ok: false });
   }
-
-  return res.json({ received: true });
 }

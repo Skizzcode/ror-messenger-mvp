@@ -1,5 +1,6 @@
 // pages/c/[slug].tsx
 import useSWR from 'swr';
+import Link from 'next/link';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useWallet } from '@solana/wallet-adapter-react';
@@ -7,7 +8,7 @@ import { signCreateThread, signMessagePayload, signBindFan } from '../../lib/sig
 import { clientInitEscrow } from '../../lib/escrowClient';
 import { t } from '../../lib/telemetry';
 
-const WalletMultiButton = dynamic(
+const WalletMultiButtonDynamic = dynamic(
   async () => (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
   { ssr: false }
 );
@@ -25,6 +26,7 @@ export default function ChatPage({ handle }: { handle: string }) {
   const [lastTx, setLastTx] = useState<string | null>(null);
   const [forceRole, setForceRole] = useState<'fan' | null>(null); // creator can “test as fan”
   const [ref, setRef] = useState<string | null>(null);
+  const [showLimitHint, setShowLimitHint] = useState(false);
 
   // slug used when creating a new thread (chat launched via /c/{creatorHandle})
   const creatorHandle = handle;
@@ -240,8 +242,27 @@ export default function ChatPage({ handle }: { handle: string }) {
 
   return (
     <div className="min-h-screen bg-[#0A0B0E] text-white flex flex-col">
-      {/* HEADER */}
-      <header className="sticky top-0 z-20 bg-black/20 backdrop-blur-xl border-b border-white/5">
+      {/* === GLOBAL HEADER (wie Index): Logo + Wallet Connect === */}
+      <header className="sticky top-0 z-30 bg-black/20 backdrop-blur-xl border-b border-white/10">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <Link href="/" className="flex items-center gap-2 group">
+            <img
+              src="/logo-ror-glass.svg"
+              alt="RoR"
+              className="h-8 w-8 rounded-2xl border border-white/10 shadow-sm"
+            />
+            <span className="font-semibold tracking-tight group-hover:opacity-80 transition">
+              Reply or Refund
+            </span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <WalletMultiButtonDynamic className="!bg-white !text-black !rounded-2xl !h-8 !px-3 !py-0 !text-sm !shadow" />
+          </div>
+        </div>
+      </header>
+
+      {/* === CHAT HEADER (Status + Limit-Badge) === */}
+      <header className="z-20 bg-black/10 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <img
@@ -259,6 +280,14 @@ export default function ChatPage({ handle }: { handle: string }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {role === 'fan' && !creatorHasReplied && (
+              <span
+                className="text-[10px] px-2 py-1 rounded-xl bg-white/5 border border-white/10"
+                title={`Before the creator's first reply you can send up to ${FAN_PRE_REPLY_LIMIT} messages.`}
+              >
+                Pre-reply cap: {fanPreCount}/{FAN_PRE_REPLY_LIMIT}
+              </span>
+            )}
             {canActAsFan && (
               <button
                 onClick={() => {
@@ -275,9 +304,6 @@ export default function ChatPage({ handle }: { handle: string }) {
                 escrow: {lastTx.slice(0, 8)}…
               </span>
             )}
-            {mounted && (
-              <WalletMultiButton className="!bg-white !text-black !rounded-2xl !h-8 !px-3 !py-0 !text-sm !shadow" />
-            )}
           </div>
         </div>
       </header>
@@ -289,7 +315,7 @@ export default function ChatPage({ handle }: { handle: string }) {
           {mounted && thread?.paid_via === 'stripe' && !thread?.fan_pubkey && role === 'fan' && (
             <div className="p-3 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 text-sm flex items-center justify-between gap-3">
               <span className="text-xs md:text-sm">
-                Bind {creatorHandle} chat to your wallet.
+                Bind this chat to your wallet.
               </span>
               <button
                 className="bg-white text-black text-xs px-3 py-1 rounded-xl"
@@ -412,12 +438,17 @@ export default function ChatPage({ handle }: { handle: string }) {
                 }
               }}
               disabled={!isConnected || fanLimitReached}
+              title={fanLimitReached ? 'Pre-reply limit reached. Please wait for the creator to respond.' : undefined}
+              onFocus={() => setShowLimitHint(false)}
             />
             <div className="flex items-center gap-2 justify-between">
               <button
                 onClick={send}
                 className="bg-white text-black text-sm px-5 py-2 rounded-2xl disabled:opacity-40 shadow-sm"
                 disabled={!canSend}
+                title={!canSend && fanLimitReached ? 'Pre-reply limit reached.' : undefined}
+                onMouseEnter={() => { if (fanLimitReached) setShowLimitHint(true); }}
+                onMouseLeave={() => setShowLimitHint(false)}
               >
                 {sending
                   ? 'Sending…'
@@ -433,6 +464,12 @@ export default function ChatPage({ handle }: { handle: string }) {
                   : 'Enter = send (desktop)'}
               </span>
             </div>
+
+            {fanLimitReached && !creatorHasReplied && showLimitHint && (
+              <div className="text-[11px] text-white/60">
+                You can send at most {FAN_PRE_REPLY_LIMIT} messages before the creator’s first reply.
+              </div>
+            )}
           </div>
         </div>
       </main>

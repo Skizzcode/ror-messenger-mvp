@@ -1,146 +1,126 @@
 // pages/api/message.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { readDB, writeDB, uid } from '../../lib/db';
-import { releaseEscrow } from '../../lib/escrow';
-import { basicLimiter } from '../../lib/rate';
-import { touchExpiryForThread } from '../../lib/ttl';
-import { verifyDetachedSig, extractTs, sha256Base58Server } from '../../lib/verify';
+import { readDB, writeDB } from '../../lib/db';
+import * as Verify from '../../lib/verify';
+import { track } from '../../lib/telemetry';
+import { apiErr, apiOk } from '../../lib/api';
 
-const MAX_LEN = 4000;
-const MAX_DRIFT_MS = 5 * 60 * 1000;
-const FAN_PRE_REPLY_LIMIT = 2; // 👈 max. Fan-Nachrichten bevor der Creator geantwortet hat
+const DRIFT_MS = 5 * 60 * 1000;
 
-function isSubstantial(text: string) {
-  const t = (text || '').replace(/\s+/g, ' ').trim();
-  return t.length >= 30 && /[A-Za-z]/.test(t);
+async function verifySig(params: { msg: string; sigBase58: string; pubkeyBase58: string }) {
+  const v: any = Verify;
+  const candidates = [
+    v.verifyServerSignature,
+    v.verifySignature,
+    v.verify,
+    v.default?.verifyServerSignature,
+    v.default?.verifySignature,
+    v.default?.verify,
+  ].filter((fn) => typeof fn === 'function');
+
+  for (const fn of candidates) {
+    const res = await fn(params);
+    if (typeof res === 'boolean') return res;
+  }
+  throw new Error('VERIFY_FN_NOT_FOUND');
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).end();
+  if (req.method !== 'POST') return apiErr(req, res, 405, 'METHOD_NOT_ALLOWED');
 
-  if (!basicLimiter(req, { maxPerMin: 20 })) {
-    return res.status(429).json({ error: 'Rate limited' });
-  }
-
-  const { threadId, from, body, sigBase58, msg, pubkeyBase58 } = req.body || {};
-  if (!threadId || !from || !body) {
-    return res.status(400).json({ error: 'Missing fields' });
-  }
-  if (from !== 'fan' && from !== 'creator') {
-    return res.status(400).json({ error: 'Invalid sender' });
-  }
-
-  const cleanBody = String(body).slice(0, MAX_LEN);
-
-  // TTL anstoßen (lazy expiry)
-  try { await touchExpiryForThread(threadId); } catch {}
-
-  // DB lesen
-  const db = await readDB();
-  db.threads = db.threads || {};
-  db.messages = db.messages || {};
-  db.escrows = db.escrows || {};
-
-  const th = db.threads[threadId];
-  if (!th) return res.status(404).json({ error: 'Thread not found' });
-
-  // refunded → nur Creator darf noch
-  if (th.status === 'refunded' && from !== 'creator') {
-    return res.status(409).json({ error: 'Thread expired/refunded' });
-  }
-
-  // =========================
-  // 🔐 Signaturprüfung
-  // =========================
-  if (sigBase58 && msg && pubkeyBase58) {
-    const bodyhash = sha256Base58Server(cleanBody);
-    const expectedPrefix = `ROR|message|thread=${threadId}|from=${from}|bodyhash=${bodyhash}|ts=`;
-    if (!msg.startsWith(expectedPrefix)) {
-      return res.status(400).json({ error: 'Invalid message payload' });
+  try {
+    const { threadId, from, body, sigBase58, msg, pubkeyBase58 } = req.body || {};
+    if (!threadId || !from || !body || !sigBase58 || !msg || !pubkeyBase58) {
+      return apiErr(req, res, 400, 'BAD_REQUEST');
+    }
+    if (!String(msg).startsWith('ROR|message|')) {
+      return apiErr(req, res, 400, 'BAD_PREFIX');
+    }
+    const tsPart = String(msg).split('|').pop();
+    const ts = Number(tsPart?.includes('ts=') ? tsPart.split('ts=').pop() : tsPart);
+    if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > DRIFT_MS) {
+      return apiErr(req, res, 400, 'TS_DRIFT');
     }
 
-    const ts = extractTs(msg);
-    if (!ts || Math.abs(Date.now() - ts) > MAX_DRIFT_MS) {
-      return res.status(400).json({ error: 'Expired/invalid timestamp' });
-    }
+    const ok = await verifySig({ msg, sigBase58, pubkeyBase58 });
+    if (!ok) return apiErr(req, res, 401, 'BAD_SIGNATURE');
 
-    // Fan → muss zur Fan-Wallet passen (oder Stripe-Fall ohne gebundene Wallet)
+    const db = await readDB();
+    const thread = db.threads?.[threadId];
+    if (!thread) return apiErr(req, res, 404, 'THREAD_NOT_FOUND');
+
     if (from === 'fan') {
-      if (th.fan_pubkey) {
-        if (pubkeyBase58 !== th.fan_pubkey) {
-          return res.status(403).json({ error: 'Fan wallet mismatch' });
-        }
-      } else if (th.paid_via === 'stripe') {
-        // Stripe-Case: noch keine Wallet gebunden → zulassen
-      } else {
-        return res.status(403).json({ error: 'Thread not bound to fan wallet' });
+      if (thread.fan_pubkey && thread.fan_pubkey !== pubkeyBase58) {
+        return apiErr(req, res, 403, 'WALLET_MISMATCH', { role: 'fan' });
+      }
+      if (!thread.fan_pubkey) thread.fan_pubkey = pubkeyBase58;
+    } else if (from === 'creator') {
+      if (thread.creator_pubkey && thread.creator_pubkey !== pubkeyBase58) {
+        return apiErr(req, res, 403, 'WALLET_MISMATCH', { role: 'creator' });
+      }
+      if (!thread.creator_pubkey) thread.creator_pubkey = pubkeyBase58;
+    } else {
+      return apiErr(req, res, 400, 'BAD_ROLE');
+    }
+
+    const prev = db.messages?.[threadId] ?? [];
+    const creatorHasReplied = prev.some((m: any) => m.from === 'creator');
+    if (from === 'fan' && !creatorHasReplied) {
+      const fanMsgs = prev.filter((m: any) => m.from === 'fan').length;
+      if (fanMsgs >= 2) {
+        await track({
+          event: 'message_sent',
+          scope: 'public',
+          handle: thread.creator,
+          threadId,
+          meta: { rejected: true, reason: 'pre_reply_cap' },
+        });
+        return apiErr(req, res, 429, 'PRE_REPLY_CAP', {
+          message: "You can send at most 2 messages before the creator's first reply.",
+        });
       }
     }
 
-    // Creator → muss zur Creator-Wallet passen, falls gesetzt
-    if (from === 'creator') {
-      if (th.creator_pubkey && pubkeyBase58 !== th.creator_pubkey) {
-        return res.status(403).json({ error: 'Creator wallet mismatch' });
-      }
-    }
+    const msgObj = {
+      id: `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      threadId,
+      from,
+      body: String(body),
+      ts: Date.now(),
+    };
 
-    const ok = verifyDetachedSig(msg, sigBase58, pubkeyBase58);
-    if (!ok) {
-      return res.status(400).json({ error: 'Invalid signature' });
-    }
-  } else {
-    // Keine Signatur: nur erlauben, wenn Stripe-Thread ohne gebundene Fan-Wallet
-    if (!(th.paid_via === 'stripe' && !th.fan_pubkey)) {
-      return res.status(400).json({ error: 'Signature required' });
-    }
-  }
+    if (!db.messages) db.messages = {} as any;
+    if (!db.messages[threadId]) db.messages[threadId] = [];
+    db.messages[threadId].push(msgObj);
 
-  // =========================
-  // 🚦 Pre-Reply-Limit für Fans
-  // =========================
-  if (from === 'fan') {
-    const msgs = db.messages[threadId] || [];
-    const firstCreatorIndex = msgs.findIndex((m: any) => m.from === 'creator');
-    // Zähle nur Fan-Messages vor der ersten Creator-Antwort
-    const fanMessagesPreReply = (firstCreatorIndex === -1 ? msgs : msgs.slice(0, firstCreatorIndex))
-      .filter((m: any) => m.from === 'fan').length;
+    await track({
+      event: 'message_sent',
+      scope: from === 'creator' ? 'creator' : 'public',
+      handle: thread.creator,
+      threadId,
+    });
 
-    if (fanMessagesPreReply >= FAN_PRE_REPLY_LIMIT) {
-      return res.status(409).json({
-        error: `Pre-reply limit reached (${FAN_PRE_REPLY_LIMIT}/${FAN_PRE_REPLY_LIMIT}). Please wait for the creator's reply.`,
-        code: 'PRE_REPLY_LIMIT',
-        limit: FAN_PRE_REPLY_LIMIT
+    if (from === 'creator' && msgObj.body.replace(/\s+/g, ' ').trim().length >= 30) {
+      thread.status = 'answered';
+      thread.answeredAt = Date.now();
+      if (!db.escrows) db.escrows = {} as any;
+      db.escrows[threadId] = {
+        ...(db.escrows[threadId] || {}),
+        status: 'released',
+        releasedAt: Date.now(),
+      };
+      await track({
+        event: 'creator_replied',
+        scope: 'creator',
+        handle: thread.creator,
+        threadId,
+        meta: { substantial: true },
       });
     }
+
+    await writeDB(db);
+    return apiOk(res, { message: msgObj });
+  } catch (e: any) {
+    return apiErr(req, res, 500, 'SERVER_ERROR', { detail: e?.message });
   }
-
-  // =========================
-  // ✅ Nachricht speichern
-  // =========================
-  const now = Date.now();
-  db.messages[threadId] = db.messages[threadId] || [];
-  db.messages[threadId].push({
-    id: uid(),
-    threadId,
-    from,
-    body: cleanBody,
-    ts: now,
-  });
-
-  // =========================
-  // 💸 Auto-Release bei substantieller Creator-Antwort
-  // =========================
-  if (from === 'creator' && th.status === 'open' && isSubstantial(cleanBody)) {
-    th.status = 'answered';
-    th.answeredAt = now;
-    try {
-      await releaseEscrow({ threadId });
-      db.escrows[threadId] = db.escrows[threadId] || {};
-      db.escrows[threadId].status = 'released';
-      db.escrows[threadId].releasedAt = now;
-    } catch {}
-  }
-
-  await writeDB(db);
-  return res.json({ ok: true });
 }

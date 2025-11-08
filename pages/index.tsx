@@ -24,10 +24,10 @@ export default function Home({ refCode }: HomeProps) {
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
-    t('page_view', { scope: 'home' });
+    t('page_view', { scope: 'public_home' });
   }, []);
 
-  // Falls Wallet verbunden → checken, ob diese Wallet bereits einem Creator gehört
+  // Wenn Wallet verbunden → prüfen, ob diese Wallet bereits einem Creator gehört
   useEffect(() => {
     let stop = false;
     async function run() {
@@ -50,6 +50,9 @@ export default function Home({ refCode }: HomeProps) {
                 }
               : null
           );
+          if (j?.ok && j.handle) {
+            t('dashboard_view', { scope: 'creator', handle: j.handle });
+          }
         }
       } catch {
         if (!stop) setMyCreator(null);
@@ -68,7 +71,7 @@ export default function Home({ refCode }: HomeProps) {
 
   return (
     <div className="min-h-screen bg-background text-white flex flex-col">
-      {/* HEADER */}
+      {/* GLOBAL HEADER */}
       <header className="w-full border-b border-white/10 bg-background/70 backdrop-blur sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3">
@@ -88,7 +91,7 @@ export default function Home({ refCode }: HomeProps) {
                 href={`/creator/${myCreator.handle}`}
                 className="text-sm px-3 py-1.5 rounded-full bg-white text-black"
                 onClick={() =>
-                  t('cta_click', { scope: 'home', props: { cta: 'go_dashboard' } })
+                  t('cta_click', { scope: 'public_home', props: { cta: 'go_dashboard' } })
                 }
               >
                 Go to my dashboard
@@ -107,7 +110,7 @@ export default function Home({ refCode }: HomeProps) {
           {/* LEFT */}
           <div className="space-y-7">
             <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-50 text-xs">
-              Built in Germany 🇩🇪
+              Built in Germany
               <span className="text-white/50">— EU-first & refund-safe</span>
             </span>
 
@@ -131,7 +134,7 @@ export default function Home({ refCode }: HomeProps) {
                     href={joinUrl}
                     className="btn"
                     onClick={() =>
-                      t('cta_click', { scope: 'home', props: { cta: 'join_creator' } })
+                      t('cta_click', { scope: 'public_home', props: { cta: 'join_creator' } })
                     }
                   >
                     I’m a creator
@@ -140,7 +143,7 @@ export default function Home({ refCode }: HomeProps) {
                     href="/fan"
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-sm hover:bg-white/5"
                     onClick={() =>
-                      t('cta_click', { scope: 'home', props: { cta: 'fan_dashboard' } })
+                      t('cta_click', { scope: 'public_home', props: { cta: 'fan_dashboard' } })
                     }
                   >
                     I’m a fan
@@ -149,10 +152,10 @@ export default function Home({ refCode }: HomeProps) {
                     href={chatDemoUrl}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/0 text-sm text-white/60 hover:bg-white/5"
                     onClick={() =>
-                      t('cta_click', { scope: 'home', props: { cta: 'demo_chat' } })
+                      t('cta_click', { scope: 'public_home', props: { cta: 'demo_chat' } })
                     }
                   >
-                    Try a demo chat →
+                    Try a demo chat
                   </Link>
                 </>
               ) : (
@@ -161,7 +164,7 @@ export default function Home({ refCode }: HomeProps) {
                     href={`/creator/${myCreator.handle}`}
                     className="btn"
                     onClick={() =>
-                      t('cta_click', { scope: 'home', props: { cta: 'go_dashboard' } })
+                      t('cta_click', { scope: 'public_home', props: { cta: 'go_dashboard' } })
                     }
                   >
                     Go to my dashboard
@@ -170,7 +173,7 @@ export default function Home({ refCode }: HomeProps) {
                     href={`/c/${myCreator.handle}`}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-sm hover:bg-white/5"
                     onClick={() =>
-                      t('cta_click', { scope: 'home', props: { cta: 'share_chat_link' } })
+                      t('cta_click', { scope: 'public_home', props: { cta: 'share_chat_link' } })
                     }
                   >
                     Share my chat link
@@ -199,7 +202,7 @@ export default function Home({ refCode }: HomeProps) {
                         className="underline"
                         href={joinUrl}
                         onClick={() =>
-                          t('cta_click', { scope: 'home', props: { cta: 'join_from_hint' } })
+                          t('cta_click', { scope: 'public_home', props: { cta: 'join_from_hint' } })
                         }
                       >
                         Create one
@@ -210,7 +213,7 @@ export default function Home({ refCode }: HomeProps) {
             )}
           </div>
 
-          {/* RIGHT – glass chat mock */}
+          {/* RIGHT – glass chat mock (emoji-free) */}
           <div className="bg-white/5 border border-white/10 rounded-3xl p-5 md:p-6 backdrop-blur-xl space-y-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -226,10 +229,10 @@ export default function Home({ refCode }: HomeProps) {
             </div>
             <div className="space-y-2 text-sm">
               <div className="max-w-[80%] bg-white text-black rounded-2xl rounded-bl-md px-3 py-2 shadow-sm">
-                Hey, quick question about your drop 👀
+                Hey, quick question about your drop
               </div>
               <div className="max-w-[80%] bg-black/25 border border-white/5 rounded-2xl rounded-br-md px-3 py-2 ml-auto shadow-sm">
-                Thanks for reaching out 🙌 what do you want to know exactly?
+                Thanks for reaching out — what do you want to know exactly?
               </div>
               <div className="text-[10px] text-white/35 mt-3">
                 Reply in time → funds release. No reply → automatic refund.
@@ -262,17 +265,6 @@ export default function Home({ refCode }: HomeProps) {
               title="Reply or refund"
               text="Reply within your window to get paid. If not, refund triggers automatically."
             />
-          </div>
-        </section>
-
-        {/* FAQ */}
-        <section className="max-w-6xl mx-auto px-4 pb-12">
-          <h2 className="text-lg font-semibold mb-4">FAQ</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Faq q="How do fans pay?" a="Via card (Stripe) or crypto wallet. Their first message is included in the payment flow." />
-            <Faq q="Where do I get paid?" a="Funds release to your connected wallet when you send a substantial reply within the timer." />
-            <Faq q="What if I don’t reply?" a="The chat auto-refunds to the fan when the timer expires. Trust by default." />
-            <Faq q="Can I set my own price?" a="Yes. You control price and the reply window in your dashboard settings." />
           </div>
         </section>
       </main>
@@ -320,17 +312,8 @@ function FeatureCard({ step, title, text }: { step: string; title: string; text:
   );
 }
 
-function Faq({ q, a }: { q: string; a: string }) {
-  return (
-    <div className="card p-4">
-      <div className="text-sm font-semibold">{q}</div>
-      <p className="text-sm text-white/60 mt-1">{a}</p>
-    </div>
-  );
-}
-
-// Redirect invite links straight to creator onboarding
 export async function getServerSideProps(ctx: any) {
+  // Referral-Links direkt in den Join-Flow leiten
   const ref = typeof ctx.query.ref === 'string' ? ctx.query.ref : null;
   if (ref) {
     return {
