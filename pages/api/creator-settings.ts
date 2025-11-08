@@ -1,11 +1,8 @@
-// pages/api/creator-settings.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB, writeDB, uid, type DB } from '../../lib/db';
 import { checkRequestAuth } from '../../lib/auth';
 
-function ensureCreatorsMap(db: DB) {
-  db.creators = db.creators || {};
-}
+function ensureCreatorsMap(db: DB) { db.creators = db.creators || {}; }
 function ensureCreator(db: DB, handle: string) {
   ensureCreatorsMap(db);
   if (!db.creators[handle]) {
@@ -36,7 +33,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const creator = ensureCreator(db as DB, handle);
 
   if (req.method === 'GET') {
-    // Public subset (no wallet leak)
     return res.json({
       handle: creator.handle,
       displayName: creator.displayName || '',
@@ -48,11 +44,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'POST') {
-    // 🔒 Owner-Gate (or first bind)
-    const auth = checkRequestAuth(req);
+    // 🔒 Owner-Gate (async)
+    const auth = await checkRequestAuth(req);
     if (!auth.ok) return res.status(401).json({ error: auth.error });
 
-    // First bind: if no wallet set yet, bind to signer wallet
     if (!creator.wallet) {
       creator.wallet = auth.wallet!;
     } else if (creator.wallet !== auth.wallet) {
@@ -65,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       displayName,
       avatarDataUrl,
       referredBy,
-      wallet, // optional "Use connected wallet" button
+      wallet,
     } = (req.body ?? {}) as {
       price?: number | string;
       replyWindowHours?: number | string;
@@ -84,29 +79,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (approxSize < 500 * 1024) creator.avatarDataUrl = avatarDataUrl;
     }
 
-    // Allow explicitly updating wallet to current signer (safety: must equal auth.wallet)
     if (typeof wallet === 'string' && wallet) {
-      if (wallet !== auth.wallet) {
-        return res.status(403).json({ error: 'Forbidden: wallet mismatch' });
-      }
+      if (wallet !== auth.wallet) return res.status(403).json({ error: 'Forbidden: wallet mismatch' });
       creator.wallet = wallet;
     }
 
-    // Only-first-write for referredBy
     if (!creator.referredBy && typeof referredBy === 'string' && referredBy.trim().length > 0) {
       creator.referredBy = referredBy.trim();
     }
 
     await writeDB(db);
-    return res.json({ ok: true, settings: {
-      handle: creator.handle,
-      displayName: creator.displayName,
-      avatarDataUrl: creator.avatarDataUrl,
-      price: creator.price,
-      refCode: creator.refCode,
-      replyWindowHours: creator.replyWindowHours,
-      wallet: creator.wallet, // returned to client (owner sees his own)
-    }});
+    return res.json({
+      ok: true,
+      settings: {
+        handle: creator.handle,
+        displayName: creator.displayName,
+        avatarDataUrl: creator.avatarDataUrl,
+        price: creator.price,
+        refCode: creator.refCode,
+        replyWindowHours: creator.replyWindowHours,
+        wallet: creator.wallet,
+      },
+    });
   }
 
   return res.status(405).end();

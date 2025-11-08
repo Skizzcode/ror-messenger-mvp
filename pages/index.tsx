@@ -3,6 +3,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { t } from '../lib/telemetry';
 
 const WalletMultiButton = dynamic(
   async () => (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
@@ -22,18 +23,33 @@ export default function Home({ refCode }: HomeProps) {
   }>(null);
 
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    t('page_view', { scope: 'home' });
+  }, []);
 
+  // Falls Wallet verbunden → checken, ob diese Wallet bereits einem Creator gehört
   useEffect(() => {
     let stop = false;
     async function run() {
-      if (!wallet.publicKey) { setMyCreator(null); return; }
+      if (!wallet.publicKey) {
+        setMyCreator(null);
+        return;
+      }
       setChecking(true);
       try {
         const pk = wallet.publicKey.toBase58();
         const r = await fetch(`/api/creator-by-wallet?wallet=${encodeURIComponent(pk)}`);
         const j = await r.json();
         if (!stop) {
-          setMyCreator(j?.ok ? { handle: j.handle, displayName: j.displayName, avatarDataUrl: j.avatarDataUrl || null } : null);
+          setMyCreator(
+            j?.ok
+              ? {
+                  handle: j.handle,
+                  displayName: j.displayName,
+                  avatarDataUrl: j.avatarDataUrl || null,
+                }
+              : null
+          );
         }
       } catch {
         if (!stop) setMyCreator(null);
@@ -42,7 +58,9 @@ export default function Home({ refCode }: HomeProps) {
       }
     }
     run();
-    return () => { stop = true; };
+    return () => {
+      stop = true;
+    };
   }, [wallet.publicKey]);
 
   const chatDemoUrl = '/c/creator-demo';
@@ -54,7 +72,11 @@ export default function Home({ refCode }: HomeProps) {
       <header className="w-full border-b border-white/10 bg-background/70 backdrop-blur sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3">
-            <img src="/logo-ror-glass.svg" alt="RoR" className="h-9 w-9 rounded-2xl border border-white/10" />
+            <img
+              src="/logo-ror-glass.svg"
+              alt="RoR"
+              className="h-10 w-10 rounded-2xl border border-white/10"
+            />
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight">Reply or Refund</div>
               <div className="text-[10px] text-white/40">Paid DMs for creators</div>
@@ -62,7 +84,13 @@ export default function Home({ refCode }: HomeProps) {
           </Link>
           <div className="flex items-center gap-2">
             {mounted && wallet.publicKey && myCreator?.handle && (
-              <Link href={`/creator/${myCreator.handle}`} className="text-sm px-3 py-1.5 rounded-full bg-white text-black">
+              <Link
+                href={`/creator/${myCreator.handle}`}
+                className="text-sm px-3 py-1.5 rounded-full bg-white text-black"
+                onClick={() =>
+                  t('cta_click', { scope: 'home', props: { cta: 'go_dashboard' } })
+                }
+              >
                 Go to my dashboard
               </Link>
             )}
@@ -99,20 +127,52 @@ export default function Home({ refCode }: HomeProps) {
             <div className="flex flex-wrap gap-3">
               {!mounted || !wallet.publicKey || !myCreator?.handle ? (
                 <>
-                  <Link href={joinUrl} className="btn">I’m a creator</Link>
-                  <Link href="/fan" className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-sm hover:bg-white/5">
+                  <Link
+                    href={joinUrl}
+                    className="btn"
+                    onClick={() =>
+                      t('cta_click', { scope: 'home', props: { cta: 'join_creator' } })
+                    }
+                  >
+                    I’m a creator
+                  </Link>
+                  <Link
+                    href="/fan"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-sm hover:bg-white/5"
+                    onClick={() =>
+                      t('cta_click', { scope: 'home', props: { cta: 'fan_dashboard' } })
+                    }
+                  >
                     I’m a fan
                   </Link>
-                  <Link href={chatDemoUrl} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/0 text-sm text-white/60 hover:bg-white/5">
+                  <Link
+                    href={chatDemoUrl}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/0 text-sm text-white/60 hover:bg-white/5"
+                    onClick={() =>
+                      t('cta_click', { scope: 'home', props: { cta: 'demo_chat' } })
+                    }
+                  >
                     Try a demo chat →
                   </Link>
                 </>
               ) : (
                 <>
-                  <Link href={`/creator/${myCreator.handle}`} className="btn">
+                  <Link
+                    href={`/creator/${myCreator.handle}`}
+                    className="btn"
+                    onClick={() =>
+                      t('cta_click', { scope: 'home', props: { cta: 'go_dashboard' } })
+                    }
+                  >
                     Go to my dashboard
                   </Link>
-                  <Link href={`/c/${myCreator.handle}`} className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-sm hover:bg-white/5">
+                  <Link
+                    href={`/c/${myCreator.handle}`}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-sm hover:bg-white/5"
+                    onClick={() =>
+                      t('cta_click', { scope: 'home', props: { cta: 'share_chat_link' } })
+                    }
+                  >
                     Share my chat link
                   </Link>
                 </>
@@ -132,7 +192,20 @@ export default function Home({ refCode }: HomeProps) {
               <div className="text-[11px] text-white/40">
                 {checking
                   ? 'Checking your wallet…'
-                  : <>No creator inbox bound to this wallet. <Link className="underline" href={joinUrl}>Create one</Link>.</>}
+                  : (
+                    <>
+                      No creator inbox bound to this wallet.{' '}
+                      <Link
+                        className="underline"
+                        href={joinUrl}
+                        onClick={() =>
+                          t('cta_click', { scope: 'home', props: { cta: 'join_from_hint' } })
+                        }
+                      >
+                        Create one
+                      </Link>.
+                    </>
+                  )}
               </div>
             )}
           </div>
