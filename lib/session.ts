@@ -13,7 +13,7 @@ export type CreatorSession = {
   handle: string;
   exp: number;        // ms epoch
   iat: number;        // ms epoch
-  v: 1;               // version for future-proofing
+  v: 1;               // version für spätere Erweiterungen
 };
 
 const COOKIE_NAME = 'ror_creator_sess';
@@ -57,7 +57,7 @@ export function verifySession(token: string): { ok: boolean; payload?: CreatorSe
 export function setSessionCookie(res: any, token: string, maxAgeSec: number) {
   const cookie = [
     `${COOKIE_NAME}=${token}`,
-    `Path=/creator`,
+    `Path=/`,                  // <-- WICHTIG: Cookie gilt auch für /api
     `Max-Age=${maxAgeSec}`,
     'HttpOnly',
     'SameSite=Lax',
@@ -69,7 +69,7 @@ export function setSessionCookie(res: any, token: string, maxAgeSec: number) {
 export function clearSessionCookie(res: any) {
   const cookie = [
     `${COOKIE_NAME}=;`,
-    `Path=/creator`,
+    `Path=/`,                 // <-- Pfad muss zum Setzen passen
     'Max-Age=0',
     'HttpOnly',
     'SameSite=Lax',
