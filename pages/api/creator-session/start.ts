@@ -1,8 +1,8 @@
-// pages/api/creator-authz.ts
+// pages/api/creator-session/start.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { readDB } from '../../lib/db';
-import * as Verify from '../../lib/verify';
-import { COOKIE_NAME, verifySession } from '../../lib/session';
+import { readDB } from '../../../lib/db';
+import * as Verify from '../../../lib/verify';
+import { signSession, setSessionCookie, type CreatorSession } from '../../../lib/session';
 
 const DRIFT_MS = 5 * 60 * 1000; // ±5 Minuten
 
@@ -27,52 +27,45 @@ async function verifyHeader(msg?: string, sigBase58?: string, pubkeyBase58?: str
     try {
       const ok = await fn({ msg, sigBase58, pubkeyBase58 });
       if (ok) return true;
-    } catch { /* next */ }
+    } catch { /* try next */ }
   }
   return false;
 }
 
-function readCookie(req: NextApiRequest, name: string): string | null {
-  const raw = req.headers.cookie || '';
-  const parts = raw.split(';').map(s => s.trim());
-  for (const p of parts) {
-    if (p.startsWith(name + '=')) return p.slice(name.length + 1);
-  }
-  return null;
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
   try {
-    const handle = String(req.query.handle || '').trim();
-    if (!handle) return res.status(400).json({ ok: false, error: 'BAD_REQUEST' });
+    const { handle } = req.query;
+    const h = String(handle || '').trim();
+    if (!h) return res.status(400).json({ ok: false, error: 'BAD_REQUEST' });
 
-    const db = await readDB();
-    const creator = db.creators?.[handle];
-    if (!creator?.wallet) return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
-
-    // 1) Versuche Session-Cookie
-    const token = readCookie(req, COOKIE_NAME);
-    if (token) {
-      const v = verifySession(token);
-      if (v.ok && v.payload?.handle === handle && v.payload?.wallet === creator.wallet) {
-        return res.status(200).json({ ok: true, handle, wallet: creator.wallet, via: 'cookie' });
-      }
-      // invalid cookie → bewusst kein Hard-Fail; wir versuchen Header-Fallback
-    }
-
-    // 2) Fallback: Kurzzeit-Header
     const walletHeader = String(req.headers['x-wallet'] || '');
     const msgHeader = req.headers['x-msg'] as string | undefined;
     const sigHeader = req.headers['x-sig'] as string | undefined;
 
+    const db = await readDB();
+    const creator = db.creators?.[h];
+    if (!creator?.wallet) return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+
     const authed = await verifyHeader(msgHeader, sigHeader, walletHeader);
     if (!authed) return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+
     if (walletHeader !== String(creator.wallet)) {
       return res.status(403).json({ ok: false, error: 'WALLET_MISMATCH' });
     }
 
-    return res.status(200).json({ ok: true, handle, wallet: creator.wallet, via: 'header' });
+    // 60 Minuten Session
+    const now = Date.now();
+    const payload: CreatorSession = {
+      v: 1,
+      wallet: walletHeader,
+      handle: h,
+      iat: now,
+      exp: now + 60 * 60 * 1000,
+    };
+    const token = signSession(payload);
+    setSessionCookie(res, token, 60 * 60);
+    return res.status(200).json({ ok: true });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
   }
