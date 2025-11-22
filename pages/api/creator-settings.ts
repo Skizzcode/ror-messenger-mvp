@@ -1,8 +1,12 @@
+// pages/api/creator-settings.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB, writeDB, uid, type DB } from '../../lib/db';
 import { checkRequestAuth } from '../../lib/auth';
 
-function ensureCreatorsMap(db: DB) { db.creators = db.creators || {}; }
+function ensureCreatorsMap(db: DB) {
+  db.creators = db.creators || {};
+}
+
 function ensureCreator(db: DB, handle: string) {
   ensureCreatorsMap(db);
   if (!db.creators[handle]) {

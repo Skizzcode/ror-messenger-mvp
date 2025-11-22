@@ -9,7 +9,7 @@ const DRIFT_MS = 5 * 60 * 1000; // ±5 Minuten
 async function verifyHeader(msg?: string, sigBase58?: string, pubkeyBase58?: string) {
   if (!msg || !sigBase58 || !pubkeyBase58) return false;
   if (!String(msg).startsWith('ROR|auth|')) return false;
-  const tsPart = String(msg).split('|').find(p => p.startsWith('ts='));
+  const tsPart = String(msg).split('|').find((p) => p.startsWith('ts='));
   const ts = Number(tsPart?.split('ts=').pop());
   if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > DRIFT_MS) return false;
 
@@ -27,30 +27,47 @@ async function verifyHeader(msg?: string, sigBase58?: string, pubkeyBase58?: str
     try {
       const ok = await fn({ msg, sigBase58, pubkeyBase58 });
       if (ok) return true;
-    } catch { /* try next */ }
+    } catch {
+      /* try next */
+    }
   }
   return false;
 }
 
+const normalizeWallet = (s?: string | null) => (s || '').trim();
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
+  }
+
   try {
     const { handle } = req.query;
-    const h = String(handle || '').trim();
-    if (!h) return res.status(400).json({ ok: false, error: 'BAD_REQUEST' });
+    // 🔑 Handle genauso normalisieren wie beim Speichern
+    const h = String(handle || '').trim().toLowerCase();
+    if (!h) {
+      return res.status(400).json({ ok: false, error: 'BAD_REQUEST' });
+    }
 
-    const walletHeader = String(req.headers['x-wallet'] || '');
+    const walletHeader = normalizeWallet(String(req.headers['x-wallet'] || ''));
     const msgHeader = req.headers['x-msg'] as string | undefined;
     const sigHeader = req.headers['x-sig'] as string | undefined;
 
     const db = await readDB();
     const creator = db.creators?.[h];
-    if (!creator?.wallet) return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+
+    const dbWallet = normalizeWallet((creator as any)?.wallet ?? null);
+    if (!creator || !dbWallet) {
+      // kein Creator oder kein gebundenes Wallet → keine Session
+      return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+    }
 
     const authed = await verifyHeader(msgHeader, sigHeader, walletHeader);
-    if (!authed) return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+    if (!authed) {
+      return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+    }
 
-    if (walletHeader !== String(creator.wallet)) {
+    if (walletHeader !== dbWallet) {
       return res.status(403).json({ ok: false, error: 'WALLET_MISMATCH' });
     }
 
@@ -58,13 +75,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const now = Date.now();
     const payload: CreatorSession = {
       v: 1,
-      wallet: walletHeader,
+      wallet: dbWallet,
       handle: h,
       iat: now,
       exp: now + 60 * 60 * 1000,
     };
     const token = signSession(payload);
     setSessionCookie(res, token, 60 * 60);
+
     return res.status(200).json({ ok: true });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
