@@ -1,28 +1,75 @@
 // lib/verify.ts
+//
+// Server-side signature verification for all ROR messages
+// (auth, create-thread, message, bind-fan, etc.)
+
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
-import crypto from 'crypto';
 
-export function sha256Base58Server(input: string): string {
-  const hash = crypto.createHash('sha256').update(input, 'utf8').digest();
-  return bs58.encode(hash);
-}
+export type VerifyParams = {
+  msg: string;
+  sigBase58: string;
+  pubkeyBase58: string;
+};
 
-export function verifyDetachedSig(msg: string, sigBase58: string, pubkeyBase58: string): boolean {
+/**
+ * Core Ed25519 verification using tweetnacl.
+ * - msg: the exact string that was signed on the client
+ * - sigBase58: base58-encoded signature from wallet.signMessage()
+ * - pubkeyBase58: base58-encoded public key (wallet address)
+ */
+export async function verifySignature({
+  msg,
+  sigBase58,
+  pubkeyBase58,
+}: VerifyParams): Promise<boolean> {
   try {
-    const sig = bs58.decode(sigBase58);
-    const pub = bs58.decode(pubkeyBase58);
-    const msgBytes = new TextEncoder().encode(msg);
-    return nacl.sign.detached.verify(msgBytes, sig, pub);
-  } catch {
+    if (!msg || !sigBase58 || !pubkeyBase58) return false;
+
+    const messageBytes = new TextEncoder().encode(msg);
+    const signature = bs58.decode(sigBase58);
+    const publicKey = bs58.decode(pubkeyBase64Safe(pubkeyBase58));
+
+    if (
+      !(signature instanceof Uint8Array) ||
+      !(publicKey instanceof Uint8Array)
+    ) {
+      return false;
+    }
+
+    return nacl.sign.detached.verify(messageBytes, signature, publicKey);
+  } catch (e) {
+    console.error('verifySignature error', e);
     return false;
   }
 }
 
-/** returns timestamp (ms) if ok, else null */
-export function extractTs(msg: string): number | null {
-  const m = msg.match(/\|ts=(\d+)\s*$/);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : null;
+/**
+ * Optional: wrapper, same semantics, used by some older code paths.
+ */
+export async function verify(params: VerifyParams): Promise<boolean> {
+  return verifySignature(params);
 }
+
+/**
+ * Optional alias for "server-side verify" used in some places.
+ */
+export async function verifyServerSignature(
+  params: VerifyParams,
+): Promise<boolean> {
+  return verifySignature(params);
+}
+
+/**
+ * Helper to normalize possible accidental spaces etc. in publicKey strings.
+ */
+function pubkeyBase64Safe(input: string): string {
+  return String(input || '').trim();
+}
+
+// Default export for "import * as Verify" compatibility:
+export default {
+  verifySignature,
+  verifyServerSignature,
+  verify,
+};
