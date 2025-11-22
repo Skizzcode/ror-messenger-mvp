@@ -24,13 +24,34 @@ const EMPTY_DB: DB = {
   checkouts: {},
 };
 
+function normalizeDB(raw: any): DB {
+  if (!raw || typeof raw !== 'object') {
+    return { ...EMPTY_DB };
+  }
+
+  return {
+    threads: raw.threads && typeof raw.threads === 'object' ? raw.threads : {},
+    messages: raw.messages && typeof raw.messages === 'object' ? raw.messages : {},
+    escrows: raw.escrows && typeof raw.escrows === 'object' ? raw.escrows : {},
+    creators: raw.creators && typeof raw.creators === 'object' ? raw.creators : {},
+    checkouts: raw.checkouts && typeof raw.checkouts === 'object' ? raw.checkouts : {},
+  };
+}
+
 export async function readDB(): Promise<DB> {
-  const data = await redis.get<DB>(KEY);
-  return data || { ...EMPTY_DB };
+  try {
+    const data = await redis.get<DB>(KEY);
+    return normalizeDB(data);
+  } catch (e) {
+    // Falls Redis nicht erreichbar ist oder irgendwas schiefgeht:
+    console.error('readDB error', e);
+    return { ...EMPTY_DB };
+  }
 }
 
 export async function writeDB(db: DB): Promise<void> {
-  await redis.set(KEY, db);
+  const normalized = normalizeDB(db);
+  await redis.set(KEY, normalized);
 }
 
 export function uid(): string {
