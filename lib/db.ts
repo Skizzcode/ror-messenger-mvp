@@ -1,13 +1,6 @@
 // lib/db.ts
 import { Redis } from '@upstash/redis';
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
-
-const KEY = 'ror:db:v1';
-
 export type DB = {
   threads: Record<string, any>;
   messages: Record<string, any[]>;
@@ -24,38 +17,74 @@ const EMPTY_DB: DB = {
   checkouts: {},
 };
 
+const KEY = 'ror:db:v1';
+
+// ✅ Nur Redis verwenden, wenn URL + TOKEN gesetzt sind
+const HAS_REDIS =
+  !!process.env.UPSTASH_REDIS_REST_URL &&
+  !!process.env.UPSTASH_REDIS_REST_TOKEN;
+
+const redis = HAS_REDIS
+  ? new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    })
+  : null;
+
+// Fallback-In-Memory-DB (z.B. für lokale Dev oder fehlende ENV)
+let memoryDB: DB = { ...EMPTY_DB };
+
 function normalizeDB(raw: any): DB {
   if (!raw || typeof raw !== 'object') {
     return { ...EMPTY_DB };
   }
 
   return {
-    threads: raw.threads && typeof raw.threads === 'object' ? raw.threads : {},
-    messages: raw.messages && typeof raw.messages === 'object' ? raw.messages : {},
-    escrows: raw.escrows && typeof raw.escrows === 'object' ? raw.escrows : {},
-    creators: raw.creators && typeof raw.creators === 'object' ? raw.creators : {},
-    checkouts: raw.checkouts && typeof raw.checkouts === 'object' ? raw.checkouts : {},
+    threads:
+      raw.threads && typeof raw.threads === 'object' ? raw.threads : {},
+    messages:
+      raw.messages && typeof raw.messages === 'object' ? raw.messages : {},
+    escrows:
+      raw.escrows && typeof raw.escrows === 'object' ? raw.escrows : {},
+    creators:
+      raw.creators && typeof raw.creators === 'object' ? raw.creators : {},
+    checkouts:
+      raw.checkouts && typeof raw.checkouts === 'object' ? raw.checkouts : {},
   };
 }
 
 export async function readDB(): Promise<DB> {
   try {
-    const data = await redis.get<DB>(KEY);
-    return normalizeDB(data);
+    if (redis) {
+      const data = await redis.get<DB>(KEY);
+      const db = normalizeDB(data);
+      memoryDB = db; // Mirror in Memory
+      return db;
+    }
+    // Kein Redis → in-memory
+    return normalizeDB(memoryDB);
   } catch (e) {
-    // Falls Redis nicht erreichbar ist oder irgendwas schiefgeht:
     console.error('readDB error', e);
-    return { ...EMPTY_DB };
+    return normalizeDB(memoryDB);
   }
 }
 
 export async function writeDB(db: DB): Promise<void> {
   const normalized = normalizeDB(db);
-  await redis.set(KEY, normalized);
+  memoryDB = normalized;
+  if (redis) {
+    await redis.set(KEY, normalized);
+  }
 }
 
 export function uid(): string {
   // @ts-ignore
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-  return 'id_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return (
+    'id_' +
+    Math.random().toString(36).slice(2) +
+    Date.now().toString(36)
+  );
 }

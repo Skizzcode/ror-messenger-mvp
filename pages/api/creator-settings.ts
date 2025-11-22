@@ -27,15 +27,18 @@ function ensureCreator(db: DB, handle: string) {
 // Hilfsfunktion: findet Creator, der bereits dieselbe Wallet nutzt
 function findCreatorByWallet(db: DB, wallet: string, exceptHandle?: string) {
   if (!db.creators) return null;
-  const values = Object.values(db.creators);
+  const values = Object.values(db.creators) as any[];
   return (
     values.find(
-      (c: any) => c.wallet === wallet && c.handle !== (exceptHandle || c.handle),
+      (c) => c.wallet === wallet && c.handle !== (exceptHandle || c.handle),
     ) || null
   );
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   const handleParam =
     req.method === 'GET'
       ? (req.query?.handle as string | undefined)
@@ -45,10 +48,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!handle) return res.status(400).json({ error: 'Missing handle' });
 
   const db = await readDB();
-  const creator = ensureCreator(db as DB, handle);
-  const creatorCount = Object.keys((db as DB).creators || {}).length;
+  ensureCreatorsMap(db as DB);
+
+  const creators = (db as DB).creators;
+  const existingCreator = creators[handle] || null;
+  const hasAnyWallet = Object.values(creators).some(
+    (c: any) => !!c.wallet,
+  );
+  const isBootstrap = !hasAnyWallet; // ✅ Noch KEIN Creator mit Wallet vorhanden
 
   if (req.method === 'GET') {
+    const creator =
+      existingCreator || ensureCreator(db as DB, handle);
     return res.json({
       handle: creator.handle,
       displayName: creator.displayName || '',
@@ -76,8 +87,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       wallet?: string | null;
     };
 
-    // 🔹 BOOTSTRAP: ERSTER CREATOR (KEIN AUTH, NUR EINMAL)
-    if (creatorCount === 0) {
+    // 🔹 BOOTSTRAP: ERSTER CREATOR (SOLANGE NOCH KEINE WALLET IN DB)
+    if (isBootstrap) {
       if (typeof wallet !== 'string' || !wallet.trim()) {
         return res
           .status(400)
@@ -85,6 +96,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const w = wallet.trim();
+      const creator =
+        existingCreator || ensureCreator(db as DB, handle);
       creator.wallet = w;
 
       if (price !== undefined) creator.price = Number(price) || 0;
@@ -136,6 +149,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     const authWallet = auth.wallet;
 
+    const creator =
+      existingCreator || ensureCreator(db as DB, handle);
+
     // 1 Wallet → 1 Creator erzwingen
     const other = findCreatorByWallet(db as DB, authWallet, handle);
     if (other) {
@@ -147,7 +163,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!creator.wallet) {
       creator.wallet = authWallet;
     } else if (creator.wallet !== authWallet) {
-      return res.status(403).json({ error: 'Forbidden: wrong wallet' });
+      return res
+        .status(403)
+        .json({ error: 'Forbidden: wrong wallet' });
     }
 
     if (price !== undefined) creator.price = Number(price) || 0;
@@ -171,7 +189,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Optionales Wallet-Feld im Body → muss mit authWallet matchen
     if (typeof wallet === 'string' && wallet) {
       if (wallet !== authWallet) {
-        return res.status(403).json({ error: 'Forbidden: wallet mismatch' });
+        return res
+          .status(403)
+          .json({ error: 'Forbidden: wallet mismatch' });
       }
       creator.wallet = wallet;
     }
