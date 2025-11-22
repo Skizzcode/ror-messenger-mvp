@@ -20,7 +20,7 @@ export type VerifyParams = {
 };
 
 /**
- * Extracts the numeric timestamp from a message string like:
+ * Extract numeric timestamp from a message string like:
  * "ROR|auth|wallet=...|ts=1700000000000"
  * "ROR|create-thread|...|ts=1700000000000"
  * "ROR|message|...|ts=1700000000000"
@@ -89,12 +89,17 @@ export async function verifyServerSignature(
  * Speziell von lib/auth.ts importiert:
  *   import { verifyDetachedSig, extractTs } from './verify';
  *
- * Semantik: detached Ed25519-Signatur prüfen → boolean.
+ * Dort wird sie mit 3 Argumenten aufgerufen:
+ *   verifyDetachedSig(msg, sig, wallet)
+ *
+ * Also hier eine 3-Argumente-Signatur anbieten und intern auf verifySignature mappen.
  */
 export async function verifyDetachedSig(
-  params: VerifyParams,
+  msg: string,
+  sigBase58: string,
+  pubkeyBase58: string,
 ): Promise<boolean> {
-  return verifySignature(params);
+  return verifySignature({ msg, sigBase58, pubkeyBase58 });
 }
 
 // Default export für `import * as Verify from './verify'` Patterns.
