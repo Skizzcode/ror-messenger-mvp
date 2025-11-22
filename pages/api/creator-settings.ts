@@ -24,7 +24,6 @@ function ensureCreator(db: DB, handle: string) {
   return db.creators[handle];
 }
 
-// Hilfsfunktion: findet Creator, der bereits dieselbe Wallet nutzt
 function findCreatorByWallet(db: DB, wallet: string, exceptHandle?: string) {
   if (!db.creators) return null;
   const values = Object.values(db.creators) as any[];
@@ -33,6 +32,17 @@ function findCreatorByWallet(db: DB, wallet: string, exceptHandle?: string) {
       (c) => c.wallet === wallet && c.handle !== (exceptHandle || c.handle),
     ) || null
   );
+}
+
+function hasCreatorWithWallet(db: DB): boolean {
+  if (!db.creators) return false;
+  return Object.values(db.creators).some((c: any) => !!c.wallet);
+}
+
+function isValidReferral(db: DB, refCode: string): boolean {
+  if (!db.creators) return false;
+  const values = Object.values(db.creators) as any[];
+  return values.some((c: any) => c.refCode === refCode);
 }
 
 export default async function handler(
@@ -52,10 +62,10 @@ export default async function handler(
 
   const creators = (db as DB).creators;
   const existingCreator = creators[handle] || null;
-  const hasAnyWallet = Object.values(creators).some(
-    (c: any) => !!c.wallet,
-  );
-  const isBootstrap = !hasAnyWallet; // ✅ Noch KEIN Creator mit Wallet vorhanden
+  const hasAnyWallet = hasCreatorWithWallet(db as DB);
+  const isBootstrap = !hasAnyWallet; // ✅ first-ever creator
+  const adminInviteCode =
+    process.env.CREATOR_ADMIN_INVITE_CODE || '';
 
   if (req.method === 'GET') {
     const creator =
@@ -78,6 +88,7 @@ export default async function handler(
       avatarDataUrl,
       referredBy,
       wallet,
+      adminCode,
     } = (req.body ?? {}) as {
       price?: number | string;
       replyWindowHours?: number | string;
@@ -85,9 +96,10 @@ export default async function handler(
       avatarDataUrl?: string;
       referredBy?: string | null;
       wallet?: string | null;
+      adminCode?: string | null;
     };
 
-    // 🔹 BOOTSTRAP: ERSTER CREATOR (SOLANGE NOCH KEINE WALLET IN DB)
+    // 🔹 1) BOOTSTRAP-MODUS: erster Creator überhaupt
     if (isBootstrap) {
       if (typeof wallet !== 'string' || !wallet.trim()) {
         return res
@@ -100,14 +112,16 @@ export default async function handler(
         existingCreator || ensureCreator(db as DB, handle);
       creator.wallet = w;
 
-      if (price !== undefined) creator.price = Number(price) || 0;
+      if (price !== undefined) {
+        creator.price = Number(price) || 0;
+      }
       if (replyWindowHours !== undefined) {
-        creator.replyWindowHours = Number(replyWindowHours) || 48;
+        creator.replyWindowHours =
+          Number(replyWindowHours) || 48;
       }
       if (typeof displayName === 'string') {
         creator.displayName = displayName.trim();
       }
-
       if (
         typeof avatarDataUrl === 'string' &&
         avatarDataUrl.startsWith('data:image/')
@@ -117,7 +131,6 @@ export default async function handler(
           creator.avatarDataUrl = avatarDataUrl;
         }
       }
-
       if (
         !creator.referredBy &&
         typeof referredBy === 'string' &&
@@ -141,18 +154,20 @@ export default async function handler(
       });
     }
 
-    // 🔒 AB HIER: NORMALER PFAD (INVITE/OWNER-GATE)
-
+    // 🔹 2) NORMALER PFAD: Invite-only + Auth
     const auth = await checkRequestAuth(req);
     if (!auth.ok || !auth.wallet) {
-      return res.status(401).json({ error: auth.error || 'UNAUTHORIZED' });
+      return res.status(401).json({
+        error: auth.error || 'UNAUTHORIZED',
+      });
     }
     const authWallet = auth.wallet;
 
     const creator =
       existingCreator || ensureCreator(db as DB, handle);
+    const isNewBinding = !creator.wallet;
 
-    // 1 Wallet → 1 Creator erzwingen
+    // 1 Wallet → 1 Creator
     const other = findCreatorByWallet(db as DB, authWallet, handle);
     if (other) {
       return res.status(403).json({
@@ -160,22 +175,50 @@ export default async function handler(
       });
     }
 
-    if (!creator.wallet) {
+    if (isNewBinding) {
+      // 🔐 INVITE-ONLY ENFORCED
+      const ref =
+        typeof referredBy === 'string'
+          ? referredBy.trim()
+          : '';
+      const adminOk =
+        !!adminInviteCode &&
+        typeof adminCode === 'string' &&
+        adminCode === adminInviteCode;
+      const refOk =
+        ref.length > 0 && isValidReferral(db as DB, ref);
+
+      if (!adminOk && !refOk) {
+        return res.status(403).json({
+          error:
+            'INVITE_ONLY: valid referral or admin code required',
+        });
+      }
+
+      if (!creator.referredBy && refOk) {
+        creator.referredBy = ref;
+      }
       creator.wallet = authWallet;
-    } else if (creator.wallet !== authWallet) {
-      return res
-        .status(403)
-        .json({ error: 'Forbidden: wrong wallet' });
+    } else {
+      // bestehender Creator → Wallet muss matchen
+      if (creator.wallet !== authWallet) {
+        return res
+          .status(403)
+          .json({ error: 'Forbidden: wrong wallet' });
+      }
     }
 
-    if (price !== undefined) creator.price = Number(price) || 0;
+    // gemeinsame Felder updaten
+    if (price !== undefined) {
+      creator.price = Number(price) || 0;
+    }
     if (replyWindowHours !== undefined) {
-      creator.replyWindowHours = Number(replyWindowHours) || 48;
+      creator.replyWindowHours =
+        Number(replyWindowHours) || 48;
     }
     if (typeof displayName === 'string') {
       creator.displayName = displayName.trim();
     }
-
     if (
       typeof avatarDataUrl === 'string' &&
       avatarDataUrl.startsWith('data:image/')
@@ -184,24 +227,6 @@ export default async function handler(
       if (approxSize < 500 * 1024) {
         creator.avatarDataUrl = avatarDataUrl;
       }
-    }
-
-    // Optionales Wallet-Feld im Body → muss mit authWallet matchen
-    if (typeof wallet === 'string' && wallet) {
-      if (wallet !== authWallet) {
-        return res
-          .status(403)
-          .json({ error: 'Forbidden: wallet mismatch' });
-      }
-      creator.wallet = wallet;
-    }
-
-    if (
-      !creator.referredBy &&
-      typeof referredBy === 'string' &&
-      referredBy.trim().length > 0
-    ) {
-      creator.referredBy = referredBy.trim();
     }
 
     await writeDB(db);

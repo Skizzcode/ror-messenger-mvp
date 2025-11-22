@@ -19,7 +19,7 @@ const EMPTY_DB: DB = {
 
 const KEY = 'ror:db:v1';
 
-// ✅ Nur Redis verwenden, wenn URL + TOKEN gesetzt sind
+// ✅ Use Redis only if URL + TOKEN are present
 const HAS_REDIS =
   !!process.env.UPSTASH_REDIS_REST_URL &&
   !!process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -31,7 +31,7 @@ const redis = HAS_REDIS
     })
   : null;
 
-// Fallback-In-Memory-DB (z.B. für lokale Dev oder fehlende ENV)
+// In-memory fallback (for local dev / missing env)
 let memoryDB: DB = { ...EMPTY_DB };
 
 function normalizeDB(raw: any): DB {
@@ -58,10 +58,10 @@ export async function readDB(): Promise<DB> {
     if (redis) {
       const data = await redis.get<DB>(KEY);
       const db = normalizeDB(data);
-      memoryDB = db; // Mirror in Memory
+      memoryDB = db; // mirror in memory
       return db;
     }
-    // Kein Redis → in-memory
+    // no redis → use in-memory
     return normalizeDB(memoryDB);
   } catch (e) {
     console.error('readDB error', e);
