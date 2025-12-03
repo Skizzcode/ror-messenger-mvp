@@ -4,7 +4,12 @@ import { readDB } from '../../lib/db';
 import { touchExpiryForThread } from '../../lib/ttl';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const fanPubkey = req.query.fanPubkey as string;
+  const fanPubkey =
+    typeof req.query.fanPubkey === 'string'
+      ? req.query.fanPubkey
+      : typeof req.query.wallet === 'string'
+      ? req.query.wallet
+      : '';
   if (!fanPubkey) {
     return res.status(400).json({ error: 'Missing fanPubkey' });
   }

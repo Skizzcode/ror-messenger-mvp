@@ -4,7 +4,7 @@ import Stripe from 'stripe';
 import { readDB, writeDB } from '../../../lib/db';
 import { track } from '../../../lib/telemetry';
 
-// Wichtig: Raw-Body für Stripe-Signatur
+// Wichtig: Raw-Body fuer Stripe-Signatur
 export const config = { api: { bodyParser: false } };
 
 // Stripe-Client (ohne apiVersion -> nutzt die Lib-Default-Version; vermeidet TS-Konflikte)
@@ -49,14 +49,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
+      const meta = session.metadata || {};
 
       // Erwartete Metadaten (vom Checkout erstellt)
-      const creator = (session.metadata?.creator_handle as string) || 'unknown';
-      const fan = (session.metadata?.fan_hint as string) || 'stripe_user';
+      const creator = (meta.creator as string) || 'unknown';
+      const fan = (meta.fanHint as string) || (meta.fan_hint as string) || 'stripe_user';
       const amount = (session.amount_total || 0) / 100;
-      const ttlHours = Number(session.metadata?.ttl_hours || 24);
-      const ref = session.metadata?.ref || null;
-      const firstMessage = session.metadata?.first_message;
+      const ttlHours = Number(meta.ttlHours ?? meta.ttl_hours ?? 24);
+      const ref = meta.ref || null;
+      const firstMessage = (meta.firstMessage as string) ?? (meta.first_message as string) ?? '';
 
       const db = await readDB();
       const id = `t_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -66,6 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!db.threads) db.threads = {} as any;
       if (!db.messages) db.messages = {} as any;
       if (!db.escrows) db.escrows = {} as any;
+      if (!db.checkouts) db.checkouts = {} as any;
 
       db.threads[id] = {
         id,
@@ -77,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status: 'open',
         paid_via: 'stripe',
         ref,
-        fan_pubkey: null,      // Fan kann später Wallet binden
+        fan_pubkey: null,      // Fan kann spaeter Wallet binden
         creator_pubkey: null,
       };
 
@@ -96,6 +98,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status: 'locked',
         until: deadline,
         source: 'stripe',
+      };
+
+      // Checkout-Status aktualisieren (Success-Page kann dadurch Thread-Link anzeigen)
+      db.checkouts[session.id] = {
+        ...(db.checkouts[session.id] || {}),
+        status: 'completed',
+        creator,
+        firstMessage,
+        amount,
+        ttlHours,
+        ref,
+        threadId: id,
+        fan,
+        completedAt: now,
       };
 
       await writeDB(db);

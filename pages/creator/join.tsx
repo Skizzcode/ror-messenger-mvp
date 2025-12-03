@@ -32,7 +32,7 @@ export default function CreatorJoin() {
     if (!handle.trim()) { setMsg('Please choose a handle.'); return; }
     setBusy(true); setMsg(null);
     try {
-      const r = await fetch('/api/creator-join', {
+      const r = await fetch('/api/creator-joins', {
         method: 'POST',
         headers: { 'Content-Type':'application/json' },
         body: JSON.stringify({ ref, handle, wallet: null }),

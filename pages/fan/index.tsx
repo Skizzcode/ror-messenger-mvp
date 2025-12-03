@@ -28,7 +28,7 @@ export default function FanDashboard() {
   }, [pubkey]);
 
   const { data } = useSWR(
-    () => (pubkey ? `/api/fan-threads?wallet=${encodeURIComponent(pubkey)}` : null),
+    () => (pubkey ? `/api/fan-threads?fanPubkey=${encodeURIComponent(pubkey)}` : null),
     fetcher,
     { refreshInterval: 3000 }
   );

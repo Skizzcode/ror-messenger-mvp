@@ -1,6 +1,7 @@
 // pages/api/creator-settings.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB, writeDB, uid, type DB } from '../../lib/db';
+import { checkRequestAuth } from '../../lib/auth';
 
 function ensureCreatorsMap(db: DB) {
   db.creators = db.creators || {};
@@ -35,6 +36,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const db = await readDB();
   const creator = ensureCreator(db as DB, handle);
 
+  // Auth: allow either session cookie or header-signed auth
+  const auth = await checkRequestAuth(req);
+  if (!auth.ok) return res.status(401).json({ error: auth.error || 'Unauthorized' });
+
+  // Wallet binding rules: if already bound, must match; if not bound, bind to signer
+  if (creator.wallet && auth.wallet && creator.wallet !== auth.wallet) {
+    return res.status(403).json({ error: 'Forbidden: wrong wallet' });
+  }
+  if (!creator.wallet && auth.wallet) {
+    creator.wallet = auth.wallet;
+  }
+
   if (req.method === 'GET') {
     return res.json({
       handle: creator.handle,
@@ -43,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       price: creator.price ?? 20,
       refCode: creator.refCode || null,
       replyWindowHours: creator.replyWindowHours ?? 48,
-      // wallet wird bewusst nicht im GET zurückgegeben
+      // Wallet geben wir in GET nicht zwingend raus
     });
   }
 
@@ -64,14 +77,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       wallet?: string | null;
     };
 
-    // 🧠 Simple Rule:
-    // - wenn noch keine Wallet gesetzt ist und im Body eine Wallet kommt → binden
-    // - wenn eine Wallet gesetzt ist und eine andere im Body kommt → Fehler
+    // 🧠 Ein Creator pro Wallet:
     if (typeof wallet === 'string' && wallet.trim().length > 0) {
       const newWallet = wallet.trim();
+
+      // Prüfen, ob diese Wallet schon bei einem anderen Handle hängt
+      const already = Object.values((db as DB).creators).find(
+        (c: any) => c.wallet === newWallet && c.handle !== handle
+      );
+
+      if (already) {
+        return res.status(409).json({
+          error: 'Wallet already bound to another handle',
+          otherHandle: already.handle,
+        });
+      }
+
+      // Wenn dieser Creator noch keine Wallet hat → binden
       if (!creator.wallet) {
         creator.wallet = newWallet;
       } else if (creator.wallet !== newWallet) {
+        // Falls hier schon eine andere drin ist → Fehler
         return res.status(403).json({ error: 'Forbidden: wallet mismatch' });
       }
     }

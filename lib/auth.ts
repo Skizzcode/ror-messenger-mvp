@@ -1,5 +1,6 @@
 // lib/auth.ts
 import { verifyDetachedSig, extractTs } from './verify';
+import { verifySession, COOKIE_NAME } from './session';
 
 export type AuthCheck = {
   ok: boolean;
@@ -7,13 +8,42 @@ export type AuthCheck = {
   error?: string;
 };
 
+function getCookie(req: any, name: string): string | null {
+  try {
+    const raw = req?.headers?.cookie as string | undefined;
+    if (!raw) return null;
+    const parts = raw.split(';').map((c) => c.trim());
+    const hit = parts.find((p) => p.startsWith(`${name}=`));
+    if (!hit) return null;
+    return hit.split('=').slice(1).join('=') || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Client should send:
- *   x-wallet: <base58 pubkey>
- *   x-msg:    "ROR|auth|wallet=<pubkey>|ts=<ms>"
- *   x-sig:    <base58 signature of x-msg>
+ * Client should send either:
+ *   - a valid session cookie (set by /api/creator-session/start), OR
+ *   - headers:
+ *       x-wallet: <base58 pubkey>
+ *       x-msg:    "ROR|auth|wallet=<pubkey>|ts=<ms>"
+ *       x-sig:    <base58 signature of x-msg>
  */
-export function checkRequestAuth(req: any): AuthCheck {
+export async function checkRequestAuth(req: any): Promise<AuthCheck> {
+  // 1) Try session cookie first (creator dashboard flow)
+  try {
+    const token = getCookie(req, COOKIE_NAME);
+    if (token) {
+      const verified = verifySession(token);
+      if (verified.ok && verified.payload?.wallet) {
+        return { ok: true, wallet: verified.payload.wallet };
+      }
+    }
+  } catch {
+    // fall through to header-based auth
+  }
+
+  // 2) Fallback: header-signed auth (stateless)
   const wallet = String(req.headers['x-wallet'] || '');
   const msg = String(req.headers['x-msg'] || '');
   const sig = String(req.headers['x-sig'] || '');
@@ -27,7 +57,7 @@ export function checkRequestAuth(req: any): AuthCheck {
     return { ok: false, error: 'Expired/invalid timestamp' };
   }
 
-  const ok = verifyDetachedSig(msg, sig, wallet);
+  const ok = await verifyDetachedSig(msg, sig, wallet);
   if (!ok) return { ok: false, error: 'Invalid signature' };
   return { ok: true, wallet };
 }

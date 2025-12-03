@@ -1,19 +1,17 @@
 // pages/api/checkout/create.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB, writeDB } from '../../../lib/db';
-
-// Stripe client ohne apiVersion-Angabe, damit keine TS-Mismatch-Fehler auftreten
-// (stell sicher: STRIPE_SECRET_KEY ist gesetzt)
 import Stripe from 'stripe';
 
 function getOrigin(req: NextApiRequest): string {
-  // bevorzugt öffentlich konfiguriert
+  // bevorzugt oeffentlich konfiguriert
   const envUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || '';
   if (envUrl) return envUrl.replace(/\/+$/, '');
   // fallback: aus Request-Header
-  const origin = (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-host'])
-    ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host']}`
-    : (req.headers.origin as string) || 'http://localhost:3000';
+  const origin =
+    (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-host'])
+      ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host']}`
+      : (req.headers.origin as string) || 'http://localhost:3000';
   return origin.replace(/\/+$/, '');
 }
 
@@ -21,10 +19,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') return res.status(405).end();
 
   const {
-    creator,           // handle (string) – Pflicht
-    firstMessage,      // erste Fan-Nachricht – Pflicht
-    amount,            // optional (wird von Creator-Settings überschrieben, wenn vorhanden)
-    ttlHours,          // optional (wird überschrieben, wenn Creator-Setting vorhanden)
+    creator,           // handle (string) -> Pflicht
+    firstMessage,      // erste Fan-Nachricht -> Pflicht
+    amount,            // optional (wird von Creator-Settings ueberschrieben, wenn vorhanden)
+    ttlHours,          // optional (wird ueberschrieben, wenn Creator-Setting vorhanden)
     ref,               // optional referral-code
   } = req.body || {};
 
@@ -80,20 +78,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           quantity: 1,
         },
       ],
-      // Nach dem Bezahlen zurück – dein Success-/Cancel-Flow
+      // Nach dem Bezahlen zurueck -> dein Success-/Cancel-Flow
       success_url: `${origin}/checkout/success?sid={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/checkout/cancel`,
-      // Wichtiges in Metadata mitgeben → Webhook kann daraus Thread erzeugen
+      // Metadata fuer den Webhook
       metadata: {
-        creator,
-        firstMessage,
+        creator,               // handle
+        firstMessage,          // erste Nachricht
         ttlHours: String(replyWindowHours),
         ref: ref || '',
         source: 'ror',
       },
     });
 
-    // 4) (Optional aber hilfreich) Checkout-Vormerkung in DB
+    // 4) Checkout-Vormerkung in DB
     db.checkouts = db.checkouts || {};
     db.checkouts[session.id] = {
       status: 'created',

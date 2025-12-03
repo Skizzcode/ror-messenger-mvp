@@ -20,7 +20,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!ts || Math.abs(Date.now() - ts) > 5 * 60 * 1000) {
     return res.status(400).json({ error: 'Expired/invalid timestamp' });
   }
-  if (!verifyDetachedSig(msg, sigBase58, pubkeyBase58)) {
+  const verified = await verifyDetachedSig(msg, sigBase58, pubkeyBase58);
+  if (!verified) {
     return res.status(400).json({ error: 'Invalid signature' });
   }
 

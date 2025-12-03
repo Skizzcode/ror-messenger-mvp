@@ -2,6 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB, writeDB } from '../../../lib/db';
 import { signSession, setSessionCookie, type CreatorSession } from '../../../lib/session';
+import { checkRequestAuth } from '../../../lib/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -15,9 +16,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ ok: false, error: 'BAD_REQUEST' });
     }
 
-    const walletHeader = String(req.headers['x-wallet'] || '').trim();
-    if (!walletHeader) {
-      return res.status(400).json({ ok: false, error: 'MISSING_WALLET_HEADER' });
+    // Require a signed auth header (or valid session cookie) to prove wallet ownership
+    const auth = await checkRequestAuth(req);
+    if (!auth.ok || !auth.wallet) {
+      return res.status(401).json({ ok: false, error: auth.error || 'UNAUTHORIZED' });
     }
 
     const db = await readDB();
@@ -30,13 +32,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let dbWallet = String(creator.wallet || '').trim();
 
-    // 🩹 Auto-Bind: wenn noch keine Wallet gesetzt ist, binden wir jetzt die aktuelle Wallet
+    // Bind once to the signer if no wallet is set yet
     if (!dbWallet) {
-      creator.wallet = walletHeader;
-      dbWallet = walletHeader;
+      creator.wallet = auth.wallet;
+      dbWallet = auth.wallet;
       await writeDB(db);
-    } else if (dbWallet !== walletHeader) {
-      // es gibt schon eine gebundene Wallet und sie stimmt NICHT überein
+    } else if (dbWallet !== auth.wallet) {
+      // es gibt schon eine gebundene Wallet und sie stimmt NICHT ueberein
       return res.status(403).json({ ok: false, error: 'WALLET_MISMATCH' });
     }
 
