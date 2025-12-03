@@ -40,7 +40,15 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   // 1) AuthZ via Cookie (kein Signieren/Timer)
   const { data: authz, error: authzErr, mutate: mutateAuthz } = useSWR(
     `/api/creator-authz?handle=${encodeURIComponent(handle)}`,
-    (u) => fetchJSON(u, { credentials: 'include' as any }),
+    async (u) => {
+      try {
+        return await fetchJSON(u, { credentials: 'include' as any });
+      } catch (e: any) {
+        const msg = String(e?.message || '');
+        if (msg.includes('HTTP 401') || msg.includes('HTTP 403')) return null;
+        throw e;
+      }
+    },
     { revalidateOnFocus: true, revalidateOnReconnect: true }
   );
   const authorized = !!authz?.ok;
@@ -230,7 +238,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
             </div>
             {authzErr && (
               <div className="mt-4 text-[11px] text-red-300/80">
-                Access denied. Make sure you’re connected with the bound creator wallet.
+                Access denied. Make sure you're connected with the bound creator wallet.
               </div>
             )}
           </div>
@@ -481,3 +489,4 @@ function Tabs({
 export async function getServerSideProps(ctx: any) {
   return { props: { handle: ctx.params.handle } };
 }
+

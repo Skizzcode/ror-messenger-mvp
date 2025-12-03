@@ -1,11 +1,16 @@
 // pages/api/creator-authz.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { readDB, writeDB, type DB, uid } from '../../lib/db';
+import { readDB } from '../../lib/db';
+import { checkRequestAuth } from '../../lib/auth';
 
-function ensureCreatorsMap(db: DB) {
-  db.creators = db.creators || {};
-}
-
+/**
+ * Returns { ok: true } only if:
+ * - creator exists
+ * - creator has a bound wallet
+ * - request is authenticated (session cookie or signed headers) for that wallet
+ *
+ * Otherwise responds with 401/403/404 and ok: false.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
@@ -18,31 +23,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const db = await readDB();
-    ensureCreatorsMap(db as DB);
-
-    // Wenn Creator noch nicht existiert → automatisch anlegen (ohne Wallet)
-    if (!db.creators[rawHandle]) {
-      (db as DB).creators[rawHandle] = {
-        handle: rawHandle,
-        price: 20,
-        replyWindowHours: 48,
-        wallet: null,
-        refCode: `ref_${uid().slice(0, 8)}`,
-        displayName: '',
-        avatarDataUrl: '',
-        referredBy: null,
-      };
-      await writeDB(db as DB);
+    const creator = (db.creators || {})[rawHandle];
+    if (!creator) {
+      return res.status(404).json({ ok: false, error: 'CREATOR_NOT_FOUND' });
+    }
+    if (!creator.wallet) {
+      return res.status(403).json({ ok: false, error: 'CREATOR_WALLET_NOT_SET' });
     }
 
-    const creator = (db as DB).creators[rawHandle];
+    const auth = await checkRequestAuth(req);
+    if (!auth.ok || !auth.wallet) {
+      return res.status(401).json({ ok: false, error: auth.error || 'UNAUTHORIZED' });
+    }
+    if (creator.wallet !== auth.wallet) {
+      return res.status(403).json({ ok: false, error: 'WALLET_MISMATCH' });
+    }
 
-    // 🧨 DEV-MODUS: Immer ok, egal welche Wallet
     return res.status(200).json({
       ok: true,
       handle: creator.handle,
-      wallet: creator.wallet || null,
-      via: 'dev-open-auth',
+      wallet: creator.wallet,
+      via: 'wallet-session',
     });
   } catch (e: any) {
     console.error('creator-authz error', e);
