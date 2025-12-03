@@ -28,13 +28,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid handle' });
   }
 
-  // Invite-only: valid ref required
+  const inviteOnly = String(process.env.INVITE_ONLY ?? 'true').toLowerCase() !== 'false';
+
+  // Invite-only: valid ref required unless toggled off
   const db = await readDB();
   ensureCreatorsMap(db as DB);
   const creators = (db as DB).creators;
 
-  const refOwner = Object.values<any>(creators).find((c: any) => c?.refCode === ref);
-  if (!ref || !refOwner) {
+  const refOwner = ref ? Object.values<any>(creators).find((c: any) => c?.refCode === ref) : null;
+  if (inviteOnly && (!ref || !refOwner)) {
     return res.status(403).json({ error: 'Invite required (invalid referral code)' });
   }
 

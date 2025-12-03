@@ -58,6 +58,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ ok: true });
   } catch (e: any) {
     console.error('creator-session/start error', e);
-    return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+    const msg = e?.message || 'SERVER_ERROR';
+    return res.status(500).json({ ok: false, error: msg });
   }
 }
