@@ -28,6 +28,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     refCode: c.refCode || null,
     referredBy: c.referredBy || null,
     displayName: c.displayName || c.handle,
+    email: c.email || '',
+    banned: !!c.banned,
+    avgReplyMs: c.avgReplyMs || null,
+    answerRate: c.answerRate || null,
   }));
 
   const threadsArr = Object.values<any>(db.threads || {}).sort(

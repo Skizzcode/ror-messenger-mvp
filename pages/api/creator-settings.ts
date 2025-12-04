@@ -19,6 +19,8 @@ function ensureCreator(db: DB, handle: string) {
       displayName: '',
       avatarDataUrl: '',
       referredBy: null,
+      email: '',
+      banned: false,
     };
   }
   return db.creators[handle];
@@ -56,6 +58,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       price: creator.price ?? 20,
       refCode: creator.refCode || null,
       replyWindowHours: creator.replyWindowHours ?? 48,
+      email: creator.email || '',
+      banned: !!creator.banned,
       // Wallet geben wir in GET nicht zwingend raus
     });
   }
@@ -68,6 +72,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       avatarDataUrl,
       referredBy,
       wallet,
+      email,
+      banned,
     } = (req.body ?? {}) as {
       price?: number | string;
       replyWindowHours?: number | string;
@@ -75,6 +81,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       avatarDataUrl?: string;
       referredBy?: string | null;
       wallet?: string | null;
+      email?: string;
+      banned?: boolean;
     };
 
     // 🧠 Ein Creator pro Wallet:
@@ -113,6 +121,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!creator.referredBy && typeof referredBy === 'string' && referredBy.trim().length > 0) {
       creator.referredBy = referredBy.trim();
+    }
+
+    if (typeof email === 'string' && email.trim().length > 3 && email.includes('@')) {
+      creator.email = email.trim();
+    }
+
+    if (typeof banned === 'boolean') {
+      creator.banned = banned;
     }
 
     await writeDB(db);

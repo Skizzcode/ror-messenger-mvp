@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB } from '../../lib/db';
 import { checkRequestAuth } from '../../lib/auth';
+import { writeDB } from '../../lib/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const handle = String(req.query.handle || '').trim().toLowerCase();
@@ -36,6 +37,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       allTime += amount;
       const answeredAt = Number(t?.answeredAt || 0);
       if (answeredAt >= mtdStart) mtd += amount;
+      const createdAt = Number(t?.createdAt || 0);
+      if (createdAt && answeredAt && answeredAt > createdAt) {
+        const diff = answeredAt - createdAt;
+        replyTimes.push(diff);
+      }
     } else if (status === 'open') {
       open++;
     } else if (status === 'refunded') {
@@ -43,9 +49,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  const avgReplyMs = replyTimes.length ? Math.round(replyTimes.reduce((a, b) => a + b, 0) / replyTimes.length) : null;
+  const answerRate = threads.length ? answered / threads.length : null;
+
+  // Persist SLA metrics on creator entry for reuse
+  const creatorEntry = (db.creators || {})[handle];
+  if (creatorEntry) {
+    creatorEntry.avgReplyMs = avgReplyMs;
+    creatorEntry.answerRate = answerRate;
+    await writeDB(db);
+  }
+
   return res.json({
     handle,
     counts: { open, answered, refunded, total: threads.length },
     revenue: { allTime, mtd },
+    sla: { avgReplyMs, answerRate },
   });
 }

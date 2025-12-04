@@ -104,7 +104,7 @@ export default function AdminPanel() {
             <MetricCard label="Creators" value={data?.creatorsCount ?? 0} />
             <MetricCard label="Threads" value={data?.threadsCount ?? 0} />
             <MetricCard label="Messages (loaded)" value={data?.messagesCount ?? 0} />
-            <MetricCard label="Admin wallet" value={wallet.publicKey?.toBase58()?.slice(0, 12) + '…'} muted />
+            <MetricCard label="Admin wallet" value={(wallet.publicKey?.toBase58()?.slice(0, 12) || '') + '…'} muted />
           </div>
 
           <section className="card p-4 space-y-3">
@@ -115,15 +115,21 @@ export default function AdminPanel() {
               </div>
               <div className="text-[11px] text-white/40">Showing {creators.length}</div>
             </div>
+            <div className="flex gap-2 text-[11px]">
+              <a className="underline text-white/70" href="/api/admin/export?format=csv&type=creators">Download creators CSV</a>
+              <a className="underline text-white/70" href="/api/admin/export?format=csv&type=threads">Download threads CSV</a>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-white/50 text-xs">
                   <tr>
                     <th className="text-left py-2">Handle</th>
                     <th className="text-left py-2">Wallet</th>
+                    <th className="text-left py-2">Email</th>
                     <th className="text-left py-2">Price</th>
                     <th className="text-left py-2">Window</th>
                     <th className="text-left py-2">Ref</th>
+                    <th className="text-left py-2">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -131,13 +137,36 @@ export default function AdminPanel() {
                     <tr key={c.handle}>
                       <td className="py-2 font-semibold">@{c.handle}</td>
                       <td className="py-2 text-white/60">{c.wallet?.slice(0, 10) ?? '—'}</td>
+                      <td className="py-2 text-white/60">{c.email || '—'}</td>
                       <td className="py-2">€{Number(c.price ?? 0).toFixed(2)}</td>
                       <td className="py-2">{c.replyWindowHours}h</td>
                       <td className="py-2 text-white/60">{c.refCode || '—'}</td>
+                      <td className="py-2">
+                        <button
+                          className={`text-[11px] px-2 py-1 rounded-full border ${c.banned ? 'border-red-400/50 text-red-300' : 'border-emerald-400/50 text-emerald-200'}`}
+                          onClick={async () => {
+                            try {
+                              const hdrs = await signAuthHeaders(wallet as any);
+                              if (!hdrs) { setAuthErr('Connect wallet'); return; }
+                              await fetch('/api/admin/ban', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', ...hdrs },
+                                credentials: 'include',
+                                body: JSON.stringify({ handle: c.handle, banned: !c.banned }),
+                              });
+                              mutate();
+                            } catch (e: any) {
+                              setAuthErr(e?.message || 'Toggle failed');
+                            }
+                          }}
+                        >
+                          {c.banned ? 'Banned' : 'Active'}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {!creators.length && (
-                    <tr><td className="py-3 text-white/40" colSpan={5}>No creators yet.</td></tr>
+                    <tr><td className="py-3 text-white/40" colSpan={7}>No creators yet.</td></tr>
                   )}
                 </tbody>
               </table>

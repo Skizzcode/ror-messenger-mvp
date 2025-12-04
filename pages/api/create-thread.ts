@@ -69,6 +69,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // DB laden
     const db = await readDB();
 
+    // Creator existiert & nicht gebannt
+    const creatorEntry = (db.creators || {})[creator];
+    if (creatorEntry && creatorEntry.banned) {
+      return apiErr(req, res, 403, 'CREATOR_BANNED');
+    }
+
     // IDs / Zeiten
     const id = `t_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const createdAt = Date.now();

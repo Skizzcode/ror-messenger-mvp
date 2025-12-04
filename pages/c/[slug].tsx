@@ -49,6 +49,7 @@ export default function ChatPage({ handle }: { handle: string }) {
   );
   const thread = data?.thread;
   const messages = data?.messages || [];
+  const creatorProfile = data?.creatorProfile || null;
 
   // Simple page view telemetry (thread vs handle)
   useEffect(() => {
@@ -280,6 +281,21 @@ export default function ChatPage({ handle }: { handle: string }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {thread?.creator_pubkey && (
+              <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-50">
+                Verified creator
+              </span>
+            )}
+            {creatorProfile?.answerRate !== null && creatorProfile?.answerRate !== undefined && (
+              <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 border border-white/10">
+                Answers {(creatorProfile.answerRate * 100).toFixed(0)}%
+              </span>
+            )}
+            {creatorProfile?.avgReplyMs ? (
+              <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 border border-white/10">
+                Avg reply {formatMs(creatorProfile.avgReplyMs)}
+              </span>
+            ) : null}
             {role === 'fan' && !creatorHasReplied && (
               <span
                 className="text-[10px] px-2 py-1 rounded-xl bg-white/5 border border-white/10"
@@ -475,6 +491,13 @@ export default function ChatPage({ handle }: { handle: string }) {
       </main>
     </div>
   );
+}
+
+function formatMs(ms: number) {
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (h >= 1) return `${h}h ${m}m`;
+  return `${m}m`;
 }
 
 export async function getServerSideProps(ctx: any) {

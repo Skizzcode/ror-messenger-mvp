@@ -7,6 +7,8 @@ export type DB = {
   escrows: Record<string, any>;
   creators: Record<string, any>;
   checkouts: Record<string, any>;
+  flags?: any[];
+  audit?: any[];
 };
 
 const EMPTY_DB: DB = {
@@ -15,6 +17,8 @@ const EMPTY_DB: DB = {
   escrows: {},
   creators: {},
   checkouts: {},
+  flags: [],
+  audit: [],
 };
 
 const KEY = 'ror:db:v1';
@@ -50,6 +54,8 @@ function normalizeDB(raw: any): DB {
       raw.creators && typeof raw.creators === 'object' ? raw.creators : {},
     checkouts:
       raw.checkouts && typeof raw.checkouts === 'object' ? raw.checkouts : {},
+    flags: Array.isArray(raw.flags) ? raw.flags : [],
+    audit: Array.isArray(raw.audit) ? raw.audit : [],
   };
 }
 

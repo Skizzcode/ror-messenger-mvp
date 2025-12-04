@@ -14,6 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     replyWindowHours,
     avatarDataUrl,
     ref, // referral code required for invite-only
+    email,
   } = (req.body || {}) as {
     handle?: string;
     displayName?: string;
@@ -21,11 +22,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     replyWindowHours?: number;
     avatarDataUrl?: string | null;
     ref?: string | null;
+    email?: string | null;
   };
 
   const cleanHandle = String(handle || '').trim().toLowerCase();
   if (!cleanHandle || !/^[a-z0-9-_]{2,}$/.test(cleanHandle)) {
     return res.status(400).json({ error: 'Invalid handle' });
+  }
+
+  const cleanEmail = typeof email === 'string' ? email.trim() : '';
+  if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.length < 5) {
+    return res.status(400).json({ error: 'Email required' });
   }
 
   const inviteOnly = String(process.env.INVITE_ONLY ?? 'true').toLowerCase() !== 'false';
@@ -58,12 +65,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     displayName: '',
     avatarDataUrl: '',
     referredBy: ref,
+    email: cleanEmail,
+    banned: false,
   };
 
   const entry = creators[cleanHandle];
   entry.displayName = typeof displayName === 'string' ? displayName.trim() : (entry.displayName || '');
   if (typeof price === 'number') entry.price = price;
   if (typeof replyWindowHours === 'number') entry.replyWindowHours = replyWindowHours;
+  entry.email = cleanEmail;
 
   if (typeof avatarDataUrl === 'string' && avatarDataUrl.startsWith('data:image/')) {
     const approxSize = avatarDataUrl.length * 0.75;

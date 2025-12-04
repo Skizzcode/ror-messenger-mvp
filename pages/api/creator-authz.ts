@@ -27,6 +27,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!creator) {
       return res.status(404).json({ ok: false, error: 'CREATOR_NOT_FOUND' });
     }
+    if (creator.banned) {
+      return res.status(403).json({ ok: false, error: 'CREATOR_BANNED' });
+    }
+
     if (!creator.wallet) {
       return res.status(403).json({ ok: false, error: 'CREATOR_WALLET_NOT_SET' });
     }

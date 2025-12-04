@@ -25,6 +25,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     displayName: string;
     avatarDataUrl: string | null;
     price: number;
+    avgReplyMs?: number | null;
+    answerRate?: number | null;
   } | null = null;
 
   if (thread?.creator) {
@@ -35,6 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         displayName: ce.displayName || ce.handle || thread.creator,
         avatarDataUrl: ce.avatarDataUrl || null,
         price: typeof ce.price === 'number' ? ce.price : 20,
+        avgReplyMs: typeof ce.avgReplyMs === 'number' ? ce.avgReplyMs : null,
+        answerRate: typeof ce.answerRate === 'number' ? ce.answerRate : null,
       };
     } else {
       // fallback falls creator noch nicht im creators-objekt ist
@@ -43,6 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         displayName: thread.creator,
         avatarDataUrl: thread.creator_avatar || null,
         price: typeof thread.amount === 'number' ? thread.amount : 20,
+        avgReplyMs: null,
+        answerRate: null,
       };
     }
   }

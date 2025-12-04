@@ -14,6 +14,7 @@ export default function CreatorJoin() {
   const [displayName, setDisplayName] = useState('');
   const [price, setPrice] = useState<number>(20);
   const [replyWindowHours, setReplyWindowHours] = useState<number>(48);
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -30,12 +31,13 @@ export default function CreatorJoin() {
   async function submit() {
     if (!ref) return;
     if (!handle.trim()) { setMsg('Please choose a handle.'); return; }
+    if (!email.trim() || !email.includes('@')) { setMsg('Please enter a valid email.'); return; }
     setBusy(true); setMsg(null);
     try {
       const r = await fetch('/api/creator-joins', {
         method: 'POST',
         headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ ref, handle, wallet: null }),
+        body: JSON.stringify({ ref, handle, wallet: null, email }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j?.ok) throw new Error(j?.error || 'JOIN_FAILED');
@@ -100,6 +102,14 @@ export default function CreatorJoin() {
               placeholder="e.g. alice"
               value={handle}
               onChange={(e)=>setHandle(e.target.value.replace(/\s+/g,''))}
+            />
+
+            <label className="text-sm text-white/60">Email (for payouts/ops)</label>
+            <input
+              className="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-white/15"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e)=>setEmail(e.target.value)}
             />
 
             <label className="text-sm text-white/60">Display name</label>

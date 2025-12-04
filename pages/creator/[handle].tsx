@@ -80,6 +80,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   const [displayName, setDisplayName] = useState<string>('');
   const [avatarDataUrl, setAvatarDataUrl] = useState<string>('');
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const [email, setEmail] = useState<string>('');
 
   useEffect(() => {
     if (authorized && settings) {
@@ -87,6 +88,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
       setReplyWindowHours(settings.replyWindowHours ?? 48);
       setDisplayName(settings.displayName ?? '');
       setAvatarDataUrl(settings.avatarDataUrl ?? '');
+      setEmail(settings.email ?? '');
       t('creator_dash_settings_loaded', { scope: 'creator_dashboard', props: { handle } });
     }
   }, [authorized, settings, handle]);
@@ -136,7 +138,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
 
   async function saveSettings(extra?: Record<string, any>) {
     if (!authorized) { alert('Not authorized.'); return; }
-    const body = { handle, price, replyWindowHours, displayName, ...(extra || {}) };
+    const body = { handle, price, replyWindowHours, displayName, email, ...(extra || {}) };
     t('creator_settings_save_attempt', { scope: 'creator_dashboard', props: { handle } });
     const r = await fetch('/api/creator-settings', {
       method: 'POST',
@@ -340,6 +342,14 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
               {/* Profile & settings */}
               <div className="card p-4 space-y-3">
                 <div className="font-semibold">Profile</div>
+
+                <label className="text-sm text-white/50">Email (ops/payout contact)</label>
+                <input
+                  className="input"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
 
                 <label className="text-sm text-white/50">Display name</label>
                 <input
