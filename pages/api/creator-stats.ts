@@ -27,6 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let answered = 0;
   let open = 0;
   let refunded = 0;
+  const replyTimes: number[] = [];
 
   for (const t of threads) {
     const amount = Number(t?.amount || 0);
