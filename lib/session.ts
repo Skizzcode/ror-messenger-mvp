@@ -21,10 +21,8 @@ export { COOKIE_NAME };
 
 function getSecret(): string {
   const s = process.env.ROR_SESSION_SECRET;
-  if (s && s.length >= 16) return s;
-  // Fallback for dev to avoid hard crashes; log so it can be fixed in prod.
-  console.warn('Using fallback ROR_SESSION_SECRET (set ROR_SESSION_SECRET for prod).');
-  return 'dev-change-me-ror-session-secret';
+  if (!s || s.length < 16) throw new Error('Missing ROR_SESSION_SECRET');
+  return s;
 }
 
 export function signSession(payload: CreatorSession): string {

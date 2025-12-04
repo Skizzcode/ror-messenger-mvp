@@ -52,6 +52,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
     { revalidateOnFocus: true, revalidateOnReconnect: true }
   );
   const authorized = !!authz?.ok;
+  const mustAuth = !authorized;
 
   // 2) Data nur wenn authorized
   const authedFetcher = (url: string) =>
@@ -246,6 +247,11 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
             {authzErr && (
               <div className="mt-4 text-[11px] text-red-300/80">
                 Access denied. Make sure you're connected with the bound creator wallet.
+              </div>
+            )}
+            {!authz && (
+              <div className="mt-4 text-[11px] text-white/50">
+                You cannot view any creator dashboard except your own (wallet-bound).
               </div>
             )}
           </div>

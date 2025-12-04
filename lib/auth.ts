@@ -5,6 +5,7 @@ import { verifySession, COOKIE_NAME } from './session';
 export type AuthCheck = {
   ok: boolean;
   wallet?: string;
+  viaSessionHandle?: string | null;
   error?: string;
 };
 
@@ -36,7 +37,11 @@ export async function checkRequestAuth(req: any): Promise<AuthCheck> {
     if (token) {
       const verified = verifySession(token);
       if (verified.ok && verified.payload?.wallet) {
-        return { ok: true, wallet: verified.payload.wallet };
+        return {
+          ok: true,
+          wallet: verified.payload.wallet,
+          viaSessionHandle: verified.payload.handle || null,
+        };
       }
     }
   } catch {

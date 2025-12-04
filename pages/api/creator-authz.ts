@@ -42,6 +42,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (creator.wallet !== auth.wallet) {
       return res.status(403).json({ ok: false, error: 'WALLET_MISMATCH' });
     }
+    if (auth.viaSessionHandle && auth.viaSessionHandle !== rawHandle) {
+      return res.status(403).json({ ok: false, error: 'SESSION_HANDLE_MISMATCH' });
+    }
 
     return res.status(200).json({
       ok: true,
