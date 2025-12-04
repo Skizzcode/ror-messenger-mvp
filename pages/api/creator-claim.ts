@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(403).json({ error: 'Invite required (invalid referral code)' });
   }
 
-  if (creators[cleanHandle]?.wallet) {
+  if (creators[cleanHandle]) {
     return res.status(409).json({ error: 'Handle already taken' });
   }
 

@@ -36,11 +36,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!handle) return res.status(400).json({ error: 'Missing handle' });
 
   const db = await readDB();
-  const creator = ensureCreator(db as DB, handle);
+  const existing = (db.creators || {})[handle] || null;
 
-  // Auth: allow either session cookie or header-signed auth
+  // Auth first
   const auth = await checkRequestAuth(req);
   if (!auth.ok) return res.status(401).json({ error: auth.error || 'Unauthorized' });
+
+  // Only allow creation/update for the authenticated wallet
+  let creator = existing;
+  if (!creator) {
+    creator = ensureCreator(db as DB, handle);
+  }
 
   // Wallet binding rules: if already bound, must match; if not bound, bind to signer
   if (creator.wallet && auth.wallet && creator.wallet !== auth.wallet) {

@@ -267,9 +267,9 @@ export default function ChatPage({ handle }: { handle: string }) {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <img
-              src="/logo-ror-glass.svg"
+              src={creatorProfile?.avatarDataUrl || '/logo-ror-glass.svg'}
               alt="RoR"
-              className="h-8 w-8 rounded-2xl border border-white/10 shadow-sm"
+              className="h-8 w-8 rounded-full border border-white/10 shadow-sm object-cover"
             />
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight">

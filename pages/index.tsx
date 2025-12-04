@@ -111,7 +111,7 @@ export default function Home({ refCode }: HomeProps) {
           <div className="space-y-7">
             <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-50 text-xs">
               Built in Germany
-              <span className="text-white/50">— EU-first & refund-safe</span>
+              <span className="text-white/50">– EU-first & refund-safe</span>
             </span>
 
             <h1 className="text-4xl md:text-5xl font-black leading-tight">
@@ -124,6 +124,8 @@ export default function Home({ refCode }: HomeProps) {
               Set your price and reply window. Fans pay (card or wallet) to message you.
               If you reply in time, escrow releases automatically. If you don’t, funds go back to the fan.
               No spam. No awkwardness. Just signal.
+              <br />
+              <span className="text-white/80">Vision:</span> turn DMs into a premium signal channel that respects your time, your fans’ trust, and your revenue. One link in bio, zero manual payouts, refunds guaranteed.
             </p>
 
             {/* CTAs */}
@@ -243,6 +245,66 @@ export default function Home({ refCode }: HomeProps) {
               <MiniCard title="No spam" text="Every DM is paid, signal over noise." />
               <MiniCard title="Fair by default" text="Fans always know they’ll get value or a refund." />
             </div>
+          </div>
+        </section>
+
+        {/* VISION STRIP */}
+        <section className="bg-gradient-to-r from-emerald-400/15 via-white/10 to-cyan-400/15 border-y border-white/10">
+          <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <div className="text-lg font-semibold">Reply or Refund = premium signal, not noise.</div>
+              <p className="text-white/70 text-sm max-w-2xl">
+                We’re building the default paid DM layer for creators: wallet-first, card-friendly, refund-backed.
+                Faster replies, higher intent, receipts for every conversation. One link in bio and your inbox just works.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={joinUrl}
+                className="btn"
+                onClick={() => t('cta_click', { scope: 'public_home', props: { cta: 'vision_join' } })}
+              >
+                Claim my handle
+              </Link>
+              <Link
+                href="/fan"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/20 text-sm bg-white/5 hover:bg-white/10"
+              >
+                See fan experience
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* SOCIAL PROOF / WHY */}
+        <section className="max-w-6xl mx-auto px-4 py-10 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold">Why creators stick with RoR</h2>
+              <p className="text-white/60 text-sm">Intent-rich inbox, guaranteed payouts, fans protected by refunds.</p>
+            </div>
+            <div className="flex gap-2 text-[11px] text-white/60">
+              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10">Auto-refund SLA</span>
+              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10">Wallet + card</span>
+              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10">No manual payouts</span>
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <FeatureCard
+              step="A"
+              title="Earn on signal"
+              text="Every DM is paid. Fans know they get value or money back. You keep focus for high-intent requests."
+            />
+            <FeatureCard
+              step="B"
+              title="Trust by default"
+              text="Wallet signatures + Stripe keep identity clean. Refunds and SLA badges build instant trust."
+            />
+            <FeatureCard
+              step="C"
+              title="Zero ops tax"
+              text="No spreadsheets, no manual payouts. Escrow unlocks on reply; refunds run automatically."
+            />
           </div>
         </section>
 

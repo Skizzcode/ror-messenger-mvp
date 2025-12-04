@@ -45,7 +45,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
         return await fetchJSON(u, { credentials: 'include' as any });
       } catch (e: any) {
         const msg = String(e?.message || '');
-        if (msg.includes('HTTP 401') || msg.includes('HTTP 403')) return null;
+        if (msg.includes('HTTP 401') || msg.includes('HTTP 403') || msg.includes('HTTP 404')) return null;
         throw e;
       }
     },
@@ -81,6 +81,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   const [avatarDataUrl, setAvatarDataUrl] = useState<string>('');
   const [savingAvatar, setSavingAvatar] = useState(false);
   const [email, setEmail] = useState<string>('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     if (authorized && settings) {
@@ -138,6 +139,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
 
   async function saveSettings(extra?: Record<string, any>) {
     if (!authorized) { alert('Not authorized.'); return; }
+    setSaveStatus('saving');
     const body = { handle, price, replyWindowHours, displayName, email, ...(extra || {}) };
     t('creator_settings_save_attempt', { scope: 'creator_dashboard', props: { handle } });
     const r = await fetch('/api/creator-settings', {
@@ -149,11 +151,14 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
     if (r.ok) {
       t('creator_settings_save_success', { scope: 'creator_dashboard', props: { handle } });
       mutateSettings();
+      setSaveStatus('saved');
     } else {
       const j = await r.json().catch(() => ({}));
       t('creator_settings_save_error', { scope: 'creator_dashboard', props: { handle, err: j?.error || 'unknown' } });
       alert(j?.error || 'Failed to save');
+      setSaveStatus('error');
     }
+    setTimeout(() => setSaveStatus('idle'), 1500);
   }
 
   async function onAvatarFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
@@ -399,23 +404,11 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                 />
 
                 <button className="btn w-full" onClick={() => saveSettings()}>
-                  Save
+                  {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Save'}
                 </button>
-
-                <button
-                  className="btn w-full"
-                  onClick={() => {
-                    const pk = wallet.publicKey?.toBase58();
-                    if (!pk) {
-                      alert('Connect a wallet in your browser first.');
-                      return;
-                    }
-                    t('creator_use_connected_wallet', { scope: 'creator_dashboard', props: { handle } });
-                    saveSettings({ wallet: pk });
-                  }}
-                >
-                  Use connected wallet
-                </button>
+                {saveStatus === 'error' && (
+                  <div className="text-[11px] text-red-300 text-center">Save failed</div>
+                )}
               </div>
 
               {/* referral */}
