@@ -20,7 +20,11 @@ function ensureCreator(db: DB, handle: string) {
       avatarDataUrl: '',
       referredBy: null,
       email: '',
+      emailVerified: false,
+      emailCode: uid(),
       banned: false,
+      bio: '',
+      statusText: '',
     };
   }
   return db.creators[handle];
@@ -39,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const existing = (db.creators || {})[handle] || null;
 
   // Auth first
-  const auth = await checkRequestAuth(req);
+  const auth = await checkRequestAuth(req, { allowCookie: true });
   if (!auth.ok) return res.status(401).json({ error: auth.error || 'Unauthorized' });
 
   // Only allow creation/update for the authenticated wallet
@@ -51,6 +55,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Wallet binding rules: if already bound, must match; if not bound, bind to signer
   if (creator.wallet && auth.wallet && creator.wallet !== auth.wallet) {
     return res.status(403).json({ error: 'Forbidden: wrong wallet' });
+  }
+  // prevent wallet reuse on other handles
+  if (!creator.wallet && auth.wallet) {
+    const other = Object.values<any>(db.creators || {}).find(
+      (c: any) => c.wallet === auth.wallet && c.handle !== handle
+    );
+    if (other) {
+      return res.status(409).json({ error: 'Wallet already bound to another handle', otherHandle: other.handle });
+    }
   }
   if (!creator.wallet && auth.wallet) {
     creator.wallet = auth.wallet;
@@ -65,6 +78,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       refCode: creator.refCode || null,
       replyWindowHours: creator.replyWindowHours ?? 48,
       email: creator.email || '',
+      emailVerified: !!creator.emailVerified,
+      statusText: creator.statusText || '',
+      bio: creator.bio || '',
       banned: !!creator.banned,
       // Wallet geben wir in GET nicht zwingend raus
     });
@@ -80,6 +96,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       wallet,
       email,
       banned,
+      bio,
+      statusText,
     } = (req.body ?? {}) as {
       price?: number | string;
       replyWindowHours?: number | string;
@@ -89,6 +107,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       wallet?: string | null;
       email?: string;
       banned?: boolean;
+      bio?: string;
+      statusText?: string;
     };
 
     // 🧠 Ein Creator pro Wallet:
@@ -130,8 +150,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (typeof email === 'string' && email.trim().length > 3 && email.includes('@')) {
-      creator.email = email.trim();
+      const cleanEmail = email.trim();
+      if (cleanEmail !== creator.email) {
+        creator.email = cleanEmail;
+        creator.emailVerified = false;
+        creator.emailCode = uid();
+      }
     }
+
+    if (typeof bio === 'string') creator.bio = bio.slice(0, 300);
+    if (typeof statusText === 'string') creator.statusText = statusText.slice(0, 140);
 
     if (typeof banned === 'boolean') {
       creator.banned = banned;

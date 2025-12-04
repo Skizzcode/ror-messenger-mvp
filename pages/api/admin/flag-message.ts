@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const cleanMessage = (messageId || '').trim();
   if (!cleanThread || !cleanMessage) return res.status(400).json({ ok: false, error: 'BAD_INPUT' });
 
-  const auth = await checkRequestAuth(req);
+  const auth = await checkRequestAuth(req, { allowCookie: false });
   if (!auth.ok || !auth.wallet) return res.status(401).json({ ok: false, error: auth.error || 'UNAUTHORIZED' });
   if (!isAdminWallet(auth.wallet)) return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
 

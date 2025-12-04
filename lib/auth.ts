@@ -30,22 +30,26 @@ function getCookie(req: any, name: string): string | null {
  *       x-msg:    "ROR|auth|wallet=<pubkey>|ts=<ms>"
  *       x-sig:    <base58 signature of x-msg>
  */
-export async function checkRequestAuth(req: any): Promise<AuthCheck> {
-  // 1) Try session cookie first (creator dashboard flow)
-  try {
-    const token = getCookie(req, COOKIE_NAME);
-    if (token) {
-      const verified = verifySession(token);
-      if (verified.ok && verified.payload?.wallet) {
-        return {
-          ok: true,
-          wallet: verified.payload.wallet,
-          viaSessionHandle: verified.payload.handle || null,
-        };
+export async function checkRequestAuth(req: any, opts?: { allowCookie?: boolean }): Promise<AuthCheck> {
+  const allowCookie = opts?.allowCookie !== false;
+
+  // 1) Try session cookie first (creator dashboard flow) if allowed
+  if (allowCookie) {
+    try {
+      const token = getCookie(req, COOKIE_NAME);
+      if (token) {
+        const verified = verifySession(token);
+        if (verified.ok && verified.payload?.wallet) {
+          return {
+            ok: true,
+            wallet: verified.payload.wallet,
+            viaSessionHandle: verified.payload.handle || null,
+          };
+        }
       }
+    } catch {
+      // fall through to header-based auth
     }
-  } catch {
-    // fall through to header-based auth
   }
 
   // 2) Fallback: header-signed auth (stateless)

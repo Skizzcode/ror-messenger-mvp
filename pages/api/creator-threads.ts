@@ -30,6 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const now = Date.now();
     const remainingMs = Math.max(0, (t.deadline ?? 0) - now);
     const latest = db2.threads?.[t.id] || t;
+    const lastMsg = msgs.length ? msgs[msgs.length - 1] : null;
     return {
       id: t.id,
       status: latest.status,
@@ -40,6 +41,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       fanPubkey: t.fan_pubkey || null,
       messagesCount: msgs.length,
       lastMessageAt: msgs.length ? msgs[msgs.length - 1].ts : null,
+      lastMessageBody: lastMsg?.body || null,
+      lastMessageFrom: lastMsg?.from || null,
     };
   });
 

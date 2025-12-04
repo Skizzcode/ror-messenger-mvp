@@ -4,7 +4,6 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { t } from '../../lib/telemetry';
 
 const WalletMultiButtonDynamic = dynamic(
   () => import('@solana/wallet-adapter-react-ui').then((m) => m.WalletMultiButton),
@@ -31,10 +30,6 @@ export default function AdminPanel() {
   const wallet = useWallet();
   const [authed, setAuthed] = useState(false);
   const [authErr, setAuthErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    t('page_view', { scope: 'admin_panel' });
-  }, []);
 
   const { data, mutate } = useSWR(
     () => (authed ? '/api/admin/overview' : null),
@@ -71,11 +66,10 @@ export default function AdminPanel() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#05060a] via-[#0f172a] to-[#0a0b0e] text-white">
-      {/* Header */}
       <header className="sticky top-0 z-30 bg-black/30 backdrop-blur border-b border-white/10">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-3">
-            <img src="/logo-ror-glass.svg" className="h-9 w-9 rounded-2xl border border-white/15" alt="RoR" />
+            <img src="/logo-ror-glass.svg" className="h-9 w-9 rounded-2xl " alt="RoR" />
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight">Reply or Refund</div>
               <div className="text-[11px] text-white/40">Admin panel</div>
@@ -115,9 +109,9 @@ export default function AdminPanel() {
               </div>
               <div className="text-[11px] text-white/40">Showing {creators.length}</div>
             </div>
-            <div className="flex gap-2 text-[11px]">
-              <a className="underline text-white/70" href="/api/admin/export?format=csv&type=creators">Download creators CSV</a>
-              <a className="underline text-white/70" href="/api/admin/export?format=csv&type=threads">Download threads CSV</a>
+            <div className="flex gap-2 text-[11px] text-white/70">
+              <a className="underline" href="/api/admin/export?format=csv&type=creators">Download creators CSV</a>
+              <a className="underline" href="/api/admin/export?format=csv&type=threads">Download threads CSV</a>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -141,27 +135,12 @@ export default function AdminPanel() {
                       <td className="py-2">€{Number(c.price ?? 0).toFixed(2)}</td>
                       <td className="py-2">{c.replyWindowHours}h</td>
                       <td className="py-2 text-white/60">{c.refCode || '—'}</td>
-                      <td className="py-2">
-                        <button
-                          className={`text-[11px] px-2 py-1 rounded-full border ${c.banned ? 'border-red-400/50 text-red-300' : 'border-emerald-400/50 text-emerald-200'}`}
-                          onClick={async () => {
-                            try {
-                              const hdrs = await signAuthHeaders(wallet as any);
-                              if (!hdrs) { setAuthErr('Connect wallet'); return; }
-                              await fetch('/api/admin/ban', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', ...hdrs },
-                                credentials: 'include',
-                                body: JSON.stringify({ handle: c.handle, banned: !c.banned }),
-                              });
-                              mutate();
-                            } catch (e: any) {
-                              setAuthErr(e?.message || 'Toggle failed');
-                            }
-                          }}
-                        >
-                          {c.banned ? 'Banned' : 'Active'}
-                        </button>
+                      <td className="py-2 text-[11px]">
+                        {c.banned ? (
+                          <span className="px-2 py-1 rounded-full border border-red-400/50 text-red-300">Banned</span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-full border border-emerald-400/50 text-emerald-200">Active</span>
+                        )}
                       </td>
                     </tr>
                   ))}

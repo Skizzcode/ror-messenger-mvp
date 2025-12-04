@@ -78,7 +78,7 @@ export default function Home({ refCode }: HomeProps) {
             <img
               src="/logo-ror-glass.svg"
               alt="RoR"
-              className="h-10 w-10 rounded-2xl border border-white/10"
+              className="h-10 w-10 rounded-2xl shadow-lg"
             />
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight">Reply or Refund</div>
@@ -216,10 +216,10 @@ export default function Home({ refCode }: HomeProps) {
           </div>
 
           {/* RIGHT – glass chat mock (emoji-free) */}
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-5 md:p-6 backdrop-blur-xl space-y-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
+          <div className="bg-white/5  rounded-3xl p-5 md:p-6 backdrop-blur-xl space-y-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <img src="/logo-ror-glass.svg" alt="RoR" className="h-10 w-10 rounded-2xl border border-white/10" />
+                <img src="/logo-ror-glass.svg" alt="RoR" className="h-10 w-10 rounded-2xl " />
                 <div>
                   <div className="text-sm font-semibold">Chat with @creator</div>
                   <div className="text-[10px] text-white/35">43m left • escrow locked</div>
@@ -284,9 +284,9 @@ export default function Home({ refCode }: HomeProps) {
               <p className="text-white/60 text-sm">Intent-rich inbox, guaranteed payouts, fans protected by refunds.</p>
             </div>
             <div className="flex gap-2 text-[11px] text-white/60">
-              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10">Auto-refund SLA</span>
-              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10">Wallet + card</span>
-              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10">No manual payouts</span>
+              <span className="px-3 py-1 rounded-full bg-white/5 ">Auto-refund SLA</span>
+              <span className="px-3 py-1 rounded-full bg-white/5 ">Wallet + card</span>
+              <span className="px-3 py-1 rounded-full bg-white/5 ">No manual payouts</span>
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-3">

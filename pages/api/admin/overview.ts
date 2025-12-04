@@ -10,7 +10,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const limitThreads = Math.min(200, Number(req.query.limitThreads ?? 100));
   const limitMessages = Math.min(1000, Number(req.query.limitMessages ?? 200));
 
-  const auth = await checkRequestAuth(req);
+  const auth = await checkRequestAuth(req, { allowCookie: false });
   if (!auth.ok || !auth.wallet) {
     return res.status(401).json({ ok: false, error: auth.error || 'UNAUTHORIZED' });
   }

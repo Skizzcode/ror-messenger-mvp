@@ -45,6 +45,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (auth.viaSessionHandle && auth.viaSessionHandle !== rawHandle) {
       return res.status(403).json({ ok: false, error: 'SESSION_HANDLE_MISMATCH' });
     }
+    if (!creator.emailVerified) {
+      return res.status(403).json({ ok: false, error: 'EMAIL_NOT_VERIFIED', needsVerification: true });
+    }
 
     return res.status(200).json({
       ok: true,

@@ -37,22 +37,19 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
     t('page_view', { scope: 'creator_dashboard', props: { handle } });
   }, [handle]);
 
-  // 1) AuthZ via Cookie (kein Signieren/Timer)
+  // 1) AuthZ via Cookie/headers (capture errors for verification gating)
   const { data: authz, error: authzErr, mutate: mutateAuthz } = useSWR(
     `/api/creator-authz?handle=${encodeURIComponent(handle)}`,
     async (u) => {
-      try {
-        return await fetchJSON(u, { credentials: 'include' as any });
-      } catch (e: any) {
-        const msg = String(e?.message || '');
-        if (msg.includes('HTTP 401') || msg.includes('HTTP 403') || msg.includes('HTTP 404')) return null;
-        throw e;
-      }
+      const r = await fetch(u, { credentials: 'include' as any });
+      const j = await r.json().catch(() => ({}));
+      return { status: r.status, ...j };
     },
     { revalidateOnFocus: true, revalidateOnReconnect: true }
   );
   const authorized = !!authz?.ok;
-  const mustAuth = !authorized;
+  const needsVerification = authz?.error === 'EMAIL_NOT_VERIFIED' || authz?.needsVerification;
+  const mustAuth = !authorized && !needsVerification;
 
   // 2) Data nur wenn authorized
   const authedFetcher = (url: string) =>
@@ -212,7 +209,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
             <img
               src="/logo-ror-glass.svg"
               alt="RoR"
-              className="h-8 w-8 rounded-xl border border-white/10 object-contain"
+              className="h-8 w-8 rounded-xl  object-contain"
             />
             <span className="font-bold tracking-tight group-hover:opacity-80 transition">
               Reply or Refund
@@ -256,6 +253,14 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
             )}
           </div>
         </main>
+      ) : needsVerification ? (
+        <main className="max-w-5xl mx-auto px-4 py-16">
+          <div className="max-w-lg mx-auto card p-6 space-y-4 text-center">
+            <div className="text-lg font-semibold">Verify your email</div>
+            <p className="text-sm text-white/60">Enter the verification code we sent to your email to unlock your dashboard.</p>
+            <VerificationForm handle={handle} onVerified={() => mutateAuthz()} />
+          </div>
+        </main>
       ) : (
         <>
           {/* DASHBOARD HEADER */}
@@ -264,7 +269,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
               <div className="flex items-center gap-3">
                 <img
                   src={avatarDataUrl || '/logo-ror-glass.svg'}
-                  className="h-10 w-10 rounded-2xl border border-white/10 object-cover"
+                  className="h-10 w-10 rounded-2xl  object-cover"
                   alt="Creator avatar"
                 />
                 <div>
@@ -284,7 +289,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
             <section className="md:col-span-2 space-y-6">
               {/* STATS */}
               <div className="grid grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl border border-white/10 col-span-4 md:col-span-2 bg-white/5">
+                <div className="p-3 rounded-xl  col-span-4 md:col-span-2 bg-white/5">
                   <div className="text-xs text-white/40">Earnings (MTD)</div>
                   <div className="text-2xl font-bold">€{(stats?.revenue?.mtd ?? 0).toFixed(2)}</div>
                   <div className="text-xs text-white/40 mt-1">
@@ -307,7 +312,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                 renderItem={(tItem: any) => (
                   <div
                     key={tItem.id}
-                    className="p-3 rounded-xl border border-white/10 flex items-center justify-between bg-white/5"
+                    className="p-3 rounded-xl  flex items-center justify-between bg-white/5"
                   >
                     <div>
                       <div className="flex items-center gap-2">
@@ -328,10 +333,17 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                           {tItem.status.toUpperCase()}
                         </span>
                       </div>
-                      <div className="text-xs text-white/40">
-                        {tItem.messagesCount} msgs
-                        {tItem.status === 'open' && <> · ⏳ {formatRemaining(tItem.remainingMs)} left</>}
-                        {tItem.fanPubkey ? <> · fan: {tItem.fanPubkey.slice(0, 6)}…</> : null}
+                      <div className="text-xs text-white/40 space-y-1">
+                        <div>
+                          {tItem.messagesCount} msgs
+                          {tItem.status === 'open' && <> · ⏳ {formatRemaining(tItem.remainingMs)} left</>}
+                          {tItem.fanPubkey ? <> · fan: {tItem.fanPubkey.slice(0, 6)}…</> : null}
+                        </div>
+                        {tItem.lastMessageBody && (
+                          <div className="text-white/65 text-[11px] line-clamp-1">
+                            Last {tItem.lastMessageFrom}: {tItem.lastMessageBody}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <Link
@@ -382,7 +394,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                   <img
                     src={avatarDataUrl}
                     alt="avatar"
-                    className="h-12 w-12 rounded-full border border-white/10 object-cover"
+                    className="h-12 w-12 rounded-full  object-cover"
                   />
                 ) : (
                   <div className="text-[11px] text-white/30">No avatar yet. Upload a small image.</div>
@@ -453,7 +465,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="p-3 rounded-xl border border-white/10 text-center bg-white/5">
+    <div className="p-3 rounded-xl  text-center bg-white/5">
       <div className="text-2xl font-bold">{value}</div>
       <div className="text-xs text-white/40">{label}</div>
     </div>
@@ -491,6 +503,55 @@ function Tabs({
       <div className="space-y-2">
         {items.length ? items.map(renderItem) : <div className="text-white/40 text-sm">Nothing here.</div>}
       </div>
+    </div>
+  );
+}
+
+function VerificationForm({ handle, onVerified }: { handle: string; onVerified: () => void }) {
+  const wallet = useWallet();
+  const [code, setCode] = useState('');
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
+
+  async function submit() {
+    if (!code.trim()) return;
+    setStatus('submitting');
+    try {
+      const hdrs = await signAuthHeaders(wallet as any);
+      if (!hdrs) {
+        alert('Connect a wallet that supports message signing.');
+        setStatus('idle');
+        return;
+      }
+      const r = await fetch('/api/creator/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...hdrs },
+        credentials: 'include',
+        body: JSON.stringify({ handle, code }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.ok) {
+        setStatus('error');
+        alert(j?.error || 'Invalid code');
+        return;
+      }
+      onVerified();
+    } finally {
+      setStatus('idle');
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <input
+        className="input text-center"
+        placeholder="Verification code"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+      />
+      <button className="btn w-full" onClick={submit} disabled={status === 'submitting'}>
+        {status === 'submitting' ? 'Verifying…' : 'Verify email'}
+      </button>
+      <div className="text-[11px] text-white/50">We require email verification to protect creators and fans.</div>
     </div>
   );
 }

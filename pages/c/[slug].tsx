@@ -250,7 +250,7 @@ export default function ChatPage({ handle }: { handle: string }) {
             <img
               src="/logo-ror-glass.svg"
               alt="RoR"
-              className="h-8 w-8 rounded-2xl border border-white/10 shadow-sm"
+              className="h-8 w-8 rounded-2xl  shadow-sm"
             />
             <span className="font-semibold tracking-tight group-hover:opacity-80 transition">
               Reply or Refund
@@ -269,7 +269,7 @@ export default function ChatPage({ handle }: { handle: string }) {
             <img
               src={creatorProfile?.avatarDataUrl || '/logo-ror-glass.svg'}
               alt="RoR"
-              className="h-8 w-8 rounded-full border border-white/10 shadow-sm object-cover"
+              className="h-8 w-8 rounded-full  shadow-sm object-cover"
             />
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight">
@@ -287,18 +287,18 @@ export default function ChatPage({ handle }: { handle: string }) {
               </span>
             )}
             {creatorProfile?.answerRate !== null && creatorProfile?.answerRate !== undefined && (
-              <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 border border-white/10">
+              <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 ">
                 Answers {(creatorProfile.answerRate * 100).toFixed(0)}%
               </span>
             )}
             {creatorProfile?.avgReplyMs ? (
-              <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 border border-white/10">
+              <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 ">
                 Avg reply {formatMs(creatorProfile.avgReplyMs)}
               </span>
             ) : null}
             {role === 'fan' && !creatorHasReplied && (
               <span
-                className="text-[10px] px-2 py-1 rounded-xl bg-white/5 border border-white/10"
+                className="text-[10px] px-2 py-1 rounded-xl bg-white/5 "
                 title={`Before the creator's first reply you can send up to ${FAN_PRE_REPLY_LIMIT} messages.`}
               >
                 Pre-reply cap: {fanPreCount}/{FAN_PRE_REPLY_LIMIT}
@@ -310,7 +310,7 @@ export default function ChatPage({ handle }: { handle: string }) {
                   setForceRole((r) => (r ? null : 'fan'));
                   t('switch_role_test_as_fan', { scope: 'chat', props: { threadId: thread?.id || null } });
                 }}
-                className="text-[10px] px-2 py-1 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                className="text-[10px] px-2 py-1 rounded-xl bg-white/5  hover:bg-white/10 transition"
               >
                 {forceRole === 'fan' ? 'Back to creator' : 'Test as fan'}
               </button>

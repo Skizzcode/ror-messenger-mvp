@@ -52,8 +52,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // 🔒 Owner => the signer becomes the bound wallet for this creator
-  const auth = await checkRequestAuth(req);
-  if (!auth.ok) return res.status(401).json({ error: auth.error });
+  const auth = await checkRequestAuth(req, { allowCookie: false });
+  if (!auth.ok || !auth.wallet) return res.status(401).json({ error: auth.error || "UNAUTHORIZED" });
+
+  const already = Object.values<any>(creators).find((c: any) => c.wallet === auth.wallet);
+  if (already) {
+    return res.status(409).json({ error: "Wallet already bound to another handle", otherHandle: already.handle });
+  }
 
   // Create or update skeleton
   creators[cleanHandle] = creators[cleanHandle] || {
@@ -66,7 +71,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     avatarDataUrl: '',
     referredBy: ref,
     email: cleanEmail,
+    emailVerified: false,
+    emailCode: Math.random().toString(36).slice(2, 10),
     banned: false,
+    bio: '',
+    statusText: '',
   };
 
   const entry = creators[cleanHandle];
@@ -84,5 +93,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   entry.wallet = auth.wallet!;
 
   await writeDB(db);
-  return res.json({ ok: true, handle: cleanHandle });
+  return res.json({ ok: true, handle: cleanHandle, verificationCode: entry.emailCode || null });
 }
+

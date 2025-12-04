@@ -32,13 +32,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let dbWallet = String(creator.wallet || '').trim();
 
-    // Bind once to the signer if no wallet is set yet
+    // No auto-bind here: creator must already be bound via claim/settings
     if (!dbWallet) {
-      creator.wallet = auth.wallet;
-      dbWallet = auth.wallet;
-      await writeDB(db);
-    } else if (dbWallet !== auth.wallet) {
-      // es gibt schon eine gebundene Wallet und sie stimmt NICHT ueberein
+      return res.status(403).json({ ok: false, error: 'CREATOR_WALLET_NOT_SET' });
+    }
+    if (dbWallet !== auth.wallet) {
       return res.status(403).json({ ok: false, error: 'WALLET_MISMATCH' });
     }
 
