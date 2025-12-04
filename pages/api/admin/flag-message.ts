@@ -43,7 +43,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
 
   await writeDB(db);
-  await logAudit({ kind: 'flag_message', actor: auth.wallet, detail: { threadId: cleanThread, messageId: cleanMessage, reason: msg.flagReason, archive: !!archive } });
+  await logAudit({
+    ts: Date.now(),
+    kind: 'flag_message',
+    actor: auth.wallet,
+    detail: { threadId: cleanThread, messageId: cleanMessage, reason: msg.flagReason, archive: !!archive },
+  });
 
   return res.status(200).json({ ok: true, flagged: true, archived: !!archive });
 }
