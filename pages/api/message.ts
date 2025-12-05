@@ -101,20 +101,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     if (from === 'creator' && msgObj.body.replace(/\s+/g, ' ').trim().length >= 30) {
+      const flags = Array.isArray((db as any).flags)
+        ? (db as any).flags.filter((f: any) => f.threadId === threadId && !f.archived)
+        : [];
+      const hasActiveFlag = flags.length > 0;
+
       thread.status = 'answered';
       thread.answeredAt = Date.now();
       if (!db.escrows) db.escrows = {} as any;
       db.escrows[threadId] = {
         ...(db.escrows[threadId] || {}),
-        status: 'released',
-        releasedAt: Date.now(),
+        status: hasActiveFlag ? 'hold_review' : 'released',
+        releasedAt: hasActiveFlag ? undefined : Date.now(),
+        holdReason: hasActiveFlag ? 'flagged_thread' : undefined,
       };
       await track({
         event: 'creator_replied',
         scope: 'creator',
         handle: thread.creator,
         threadId,
-        meta: { substantial: true },
+        meta: { substantial: true, hold: hasActiveFlag },
       });
     }
 

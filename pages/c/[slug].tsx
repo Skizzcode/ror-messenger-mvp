@@ -157,10 +157,22 @@ export default function ChatPage({ handle }: { handle: string }) {
   const fastPrice = creatorProfile?.fastPrice ?? Math.round(standardPrice * 1.5 * 100) / 100;
   const fastWindow = creatorProfile?.fastReplyWindowHours ?? Math.max(12, Math.round(standardWindow / 2));
   const selectedOffer = offers.find((o: any) => o.id === selectedOfferId) || null;
+  const discountActive = discountPercent !== null && !Number.isNaN(discountPercent);
+  const hasStripeConnect = !!creatorProfile?.stripeAccountId;
 
   const shell = 'bg-gradient-to-br from-[#05070f] via-[#0d1327] to-[#05070f] text-white';
   const panel = 'bg-white/5 border border-white/10 backdrop-blur-xl shadow-[0_30px_120px_rgba(0,0,0,0.45)]';
-  const pill = 'px-3 py-1 rounded-full text-[11px] border border-white/15 bg-white/10';
+  const pill = 'px-3 py-1 rounded-full text-[11px] border shadow-sm transition-transform hover:-translate-y-[1px]';
+  const pillStatus = !thread
+    ? 'bg-sky-400/20 border-sky-300/35 text-sky-50'
+    : thread.status === 'answered'
+    ? 'bg-emerald-400/20 border-emerald-300/40 text-emerald-50'
+    : thread.status === 'refunded'
+    ? 'bg-rose-400/20 border-rose-300/35 text-rose-50'
+    : 'bg-amber-400/20 border-amber-300/35 text-amber-50';
+  const pillTime = 'bg-cyan-400/15 border-cyan-300/30 text-cyan-50';
+  const pillNeutral = 'bg-white/10 border-white/20 text-white/85';
+  const pillAccent = 'bg-indigo-400/20 border-indigo-300/35 text-indigo-50';
 
   // Send message or create thread
   async function send() {
@@ -252,7 +264,7 @@ export default function ChatPage({ handle }: { handle: string }) {
             <img
               src="/logo-ror-glass.svg"
               alt="RoR"
-              className="h-10 w-10 rounded-2xl object-contain shadow-lg"
+              className="h-12 w-12 rounded-3xl object-contain shadow-lg"
             />
             <div>
               <div className="font-bold tracking-tight group-hover:opacity-80 transition">Reply or Refund</div>
@@ -284,19 +296,31 @@ export default function ChatPage({ handle }: { handle: string }) {
                       @{creatorHandle}
                     </span>
                   </div>
-                  <div className="text-sm text-white/60">Private chat · auto-refund if creator misses SLA.</div>
+                  <div className="text-sm text-white/80">
+                    Guaranteed reply in {standardWindow}h or auto-refund. Escrow holds funds until creator replies.
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.12em]">
-                    <span className={pill}>{statusLabel}</span>
-                    {timeLeft && <span className={pill}>Time left {timeLeft}</span>}
-                    <span className={pill}>{standardWindow}h SLA</span>
+                    <span className={`${pill} ${pillStatus}`}>{statusLabel}</span>
+                    {timeLeft && <span className={`${pill} ${pillTime}`}>Time left {timeLeft}</span>}
+                    <span className={`${pill} ${pillAccent}`}>{standardWindow}h SLA</span>
+                    <span className={`${pill} bg-white/10 border-white/20 text-white/85`}>Flow: Paid → Escrow → Reply → Release/Refund</span>
+                    {discountActive && (
+                      <span className={`${pill} bg-emerald-400/20 border-emerald-300/40 text-emerald-50`}>
+                        Launch promo: {discountPercent}% off
+                      </span>
+                    )}
                     {creatorProfile?.answerRate !== null && creatorProfile?.answerRate !== undefined && (
-                      <span className={pill}>Answers {(creatorProfile.answerRate * 100).toFixed(0)}%</span>
+                      <span className={`${pill} bg-emerald-300/20 border-emerald-200/40 text-emerald-50`}>
+                        Answers {(creatorProfile.answerRate * 100).toFixed(0)}%
+                      </span>
                     )}
                     {creatorProfile?.avgReplyMs ? (
-                      <span className={pill}>Avg reply {formatMs(creatorProfile.avgReplyMs)}</span>
+                      <span className={`${pill} bg-blue-400/20 border-blue-300/35 text-blue-50`}>
+                        Avg reply {formatMs(creatorProfile.avgReplyMs)}
+                      </span>
                     ) : null}
                     {mounted && lastTx && (
-                      <span className={pill}>Escrow {lastTx.slice(0, 8)}...</span>
+                      <span className={`${pill} ${pillNeutral}`}>Escrow {lastTx.slice(0, 8)}...</span>
                     )}
                   </div>
                 </div>
@@ -339,10 +363,18 @@ export default function ChatPage({ handle }: { handle: string }) {
             <div className={`${panel} rounded-3xl overflow-hidden`}>
               <div className="px-5 py-4 flex flex-wrap items-center justify-between gap-3 border-b border-white/10">
                 <div className="flex items-center gap-2 flex-wrap text-[12px] text-white/80">
-                  <span className={pill}>{statusLabel}</span>
-                  {timeLeft && <span className={pill}>Time left {timeLeft}</span>}
+                  <span className={`${pill} ${pillStatus}`}>{statusLabel}</span>
+                  {timeLeft && <span className={`${pill} ${pillTime}`}>Time left {timeLeft}</span>}
                   {role === 'fan' && !creatorHasReplied && (
-                    <span className={pill}>Pre-reply cap {fanPreCount}/{FAN_PRE_REPLY_LIMIT}</span>
+                    <span className={`${pill} bg-indigo-400/20 border-indigo-300/35 text-indigo-50`}>
+                      Pre-reply cap {fanPreCount}/{FAN_PRE_REPLY_LIMIT}
+                    </span>
+                  )}
+                  <span className={`${pill} bg-white/10 border-white/20 text-white/85`}>Flow: Paid → Escrow → Reply → Release/Refund</span>
+                  {discountActive && (
+                    <span className={`${pill} bg-emerald-400/20 border-emerald-300/40 text-emerald-50`}>
+                      Launch promo: {discountPercent}% off
+                    </span>
                   )}
                 </div>
                 <div className="text-[11px] text-white/60 flex items-center gap-2">
@@ -427,8 +459,8 @@ export default function ChatPage({ handle }: { handle: string }) {
                 </div>
               )}
 
-              {thread && thread.status === 'answered' && (
-                <div className="px-5 pb-4 pt-2 border-t border-white/10 grid gap-3 md:grid-cols-2">
+            {thread && thread.status === 'answered' && (
+              <div className="px-5 pb-4 pt-2 border-t border-white/10 grid gap-3 md:grid-cols-2">
                   <button
                     className="px-4 py-3 rounded-2xl border border-white/15 bg-white/10 text-sm text-left hover:bg-white/15 transition"
                     onClick={() => {
@@ -439,7 +471,7 @@ export default function ChatPage({ handle }: { handle: string }) {
                     }}
                   >
                     <div className="font-semibold">Start follow-up (-20%)</div>
-                    <div className="text-xs text-white/70">Return with a discount and keep the thread warm.</div>
+                    <div className="text-xs text-white/70">Return with a discount and keep the thread warm (return customer special).</div>
                   </button>
                   <div className="flex items-center gap-2">
                     <input
@@ -490,6 +522,11 @@ export default function ChatPage({ handle }: { handle: string }) {
                     ))}
                   </div>
                 )}
+                {!hasStripeConnect && !thread && (
+                  <div className="text-[11px] text-amber-200 bg-amber-500/10 border border-amber-300/30 px-3 py-2 rounded-xl">
+                    Card checkout is disabled for this creator (Stripe not connected). Use wallet flow only.
+                  </div>
+                )}
 
                 <textarea
                   className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-white/15 disabled:opacity-40"
@@ -515,7 +552,7 @@ export default function ChatPage({ handle }: { handle: string }) {
                 <div className="flex items-center gap-2 justify-between">
                   <button
                     onClick={send}
-                    className="bg-white text-black text-sm px-5 py-2 rounded-2xl disabled:opacity-40 shadow-sm"
+                    className="bg-gradient-to-r from-emerald-300 via-cyan-200 to-blue-200 text-[#0b1424] text-sm px-5 py-2 rounded-2xl disabled:opacity-40 shadow-lg hover:shadow-xl hover:-translate-y-[1px] transition"
                     disabled={!canSend}
                     title={!canSend && fanLimitReached ? 'Pre-reply limit reached.' : undefined}
                     onMouseEnter={() => { if (fanLimitReached) setShowLimitHint(true); }}
@@ -565,6 +602,7 @@ export default function ChatPage({ handle }: { handle: string }) {
                     'px-4 py-2 rounded-2xl text-sm border ' +
                     (payVariant === 'standard' ? 'bg-white text-black' : 'border-white/30')
                   }
+                  disabled={!hasStripeConnect}
                 >
                   Standard · €{standardPrice.toFixed(2)}
                 </button>
@@ -574,6 +612,7 @@ export default function ChatPage({ handle }: { handle: string }) {
                     'px-4 py-2 rounded-2xl text-sm border ' +
                     (payVariant === 'fast' ? 'bg-white text-black' : 'border-white/30')
                   }
+                  disabled={!hasStripeConnect}
                 >
                   Fast · €{fastPrice.toFixed(2)}
                 </button>
@@ -588,6 +627,7 @@ export default function ChatPage({ handle }: { handle: string }) {
                       'px-4 py-2 rounded-2xl text-sm border ' +
                       (selectedOfferId === o.id ? 'bg-white text-black' : 'border-white/30')
                     }
+                    disabled={!hasStripeConnect}
                   >
                     {o.title || 'Custom'} · €{Number(o.price || 0).toFixed(2)}
                   </button>
@@ -608,6 +648,10 @@ export default function ChatPage({ handle }: { handle: string }) {
                     alert('Type your first message first.');
                     return;
                   }
+                  if (!hasStripeConnect) {
+                    alert('Card checkout is not available for this creator.');
+                    return;
+                  }
                   try {
                     t('pay_with_card_click', { scope: 'chat', props: { creator: creatorHandle, variant: payVariant } });
                     const r = await fetch('/api/checkout/create', {
@@ -624,14 +668,23 @@ export default function ChatPage({ handle }: { handle: string }) {
                         ...(ref ? { ref } : {}),
                       }),
                     });
-                    const j = await r.json();
+                    const j = await r.json().catch(() => ({}));
+                    if (!r.ok) {
+                      const msg =
+                        j?.error === 'STRIPE_CONNECT_ONBOARDING_REQUIRED'
+                          ? 'Creator must finish Stripe onboarding before card checkouts.'
+                          : j?.error || 'Checkout unavailable. Try again later.';
+                      setToast(msg);
+                      setTimeout(() => setToast(null), 2600);
+                      return;
+                    }
                     if (j?.url) {
                       setToast('Redirecting to secure checkout...');
                       setTimeout(() => setToast(null), 1500);
                       window.location.href = j.url;
                     } else {
-                      setToast('Redirecting to secure checkout...');
-                      setTimeout(() => setToast(null), 1500);
+                      setToast('Checkout link missing. Try again.');
+                      setTimeout(() => setToast(null), 1800);
                     }
                   } catch (e) {
                     console.error(e);
@@ -639,13 +692,23 @@ export default function ChatPage({ handle }: { handle: string }) {
                     setTimeout(() => setToast(null), 2000);
                   }
                 }}
-                className="w-full bg-white text-black text-sm px-4 py-3 rounded-2xl shadow hover:translate-y-[-1px] transition"
+                className="w-full bg-gradient-to-r from-emerald-300 via-cyan-200 to-blue-200 text-[#0b1424] text-sm px-4 py-3 rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-[1px] transition disabled:opacity-50"
+                disabled={!hasStripeConnect}
               >
                 Pay with card to start
+                <div className="text-[11px] text-black/70">
+                  Secure checkout · Escrowed until reply · Auto-refund on SLA miss
+                  {discountActive && ` · Launch promo ${discountPercent}% off`}
+                </div>
               </button>
               <div className="text-[11px] text-white/55">
                 Your first message is sent after checkout. Escrow releases when the creator replies within SLA.
               </div>
+              {!hasStripeConnect && (
+                <div className="text-[11px] text-amber-200 bg-amber-500/10 border border-amber-300/30 px-3 py-2 rounded-xl">
+                  Card checkout disabled until this creator connects Stripe. Use wallet flow instead.
+                </div>
+              )}
             </div>
 
             <div className={`${panel} rounded-3xl p-5 space-y-3`}>
@@ -653,7 +716,7 @@ export default function ChatPage({ handle }: { handle: string }) {
               <div className="text-xs text-white/70 space-y-2">
                 <div className="flex items-center justify-between">
                   <span>Status</span>
-                  <span className="px-2 py-1 rounded-full bg-white/10 border border-white/15 text-[11px]">{statusLabel}</span>
+                  <span className={`px-2 py-1 rounded-full text-[11px] ${pill} ${pillStatus}`}>{statusLabel}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Payment</span>

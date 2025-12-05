@@ -50,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
-    const meta = session.metadata || {};
+      const meta = session.metadata || {};
 
       // Tip flow
       if (meta.type === 'tip') {
@@ -169,7 +169,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         scope: 'system',
         handle: creator,
         threadId: id,
-        meta: { paid_via: 'stripe', sessionId: (session.id as string) || null },
+        meta: {
+          paid_via: 'stripe',
+          sessionId: (session.id as string) || null,
+          payment_intent: session.payment_intent || null,
+          connect_destination: creatorEntry?.stripeAccountId || null,
+          payout_status: creatorEntry?.stripeAccountId ? 'pending' : 'requires_connect',
+        },
       });
     }
 

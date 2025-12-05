@@ -171,6 +171,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Optional: Stripe Connect Account ID (must start with acct_)
+    const stripeAccountId = (req.body as any)?.stripeAccountId;
+    if (typeof stripeAccountId === 'string' && stripeAccountId.trim()) {
+      const clean = stripeAccountId.trim();
+      if (!clean.startsWith('acct_') || clean.length < 8) {
+        return res.status(400).json({ error: 'INVALID_STRIPE_ACCOUNT_ID' });
+      }
+      (creator as any).stripeAccountId = clean;
+    }
+
     if (typeof bio === 'string') creator.bio = bio.slice(0, 300);
     if (typeof statusText === 'string') creator.statusText = statusText.slice(0, 140);
 
@@ -204,6 +214,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         refCode: creator.refCode,
         replyWindowHours: creator.replyWindowHours,
         wallet: creator.wallet,
+        stripeAccountId: (creator as any).stripeAccountId || null,
       },
     });
   }

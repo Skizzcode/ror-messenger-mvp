@@ -32,6 +32,7 @@ async function signAuthHeaders(wallet: any) {
 export default function CreatorDashboard({ handle }: { handle: string }) {
   const wallet = useWallet();
   const [copied, setCopied] = useState(false);
+  const stripeConnectLink = process.env.NEXT_PUBLIC_STRIPE_CONNECT_URL || 'https://dashboard.stripe.com/connect/accounts';
 
   useEffect(() => {
     t('page_view', { scope: 'creator_dashboard', props: { handle } });
@@ -87,6 +88,9 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   const [refStats, setRefStats] = useState<any>(null);
   const [refStatsLoading, setRefStatsLoading] = useState(false);
   const [theme, setTheme] = useState<'diamond' | 'pearl'>('diamond');
+  const [discountParam, setDiscountParam] = useState<number | null>(null);
+  const hasStripeAccount = !!settings?.stripeAccountId;
+  const [stripeAccountInput, setStripeAccountInput] = useState<string>('');
 
   useEffect(() => {
     if (authorized && settings) {
@@ -98,9 +102,19 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
       setFastPrice(settings.fastPrice ?? null);
       setFastReplyWindow(settings.fastReplyWindowHours ?? null);
       setOffers(settings.offers || []);
+      setStripeAccountInput(settings.stripeAccountId || '');
       t('creator_dash_settings_loaded', { scope: 'creator_dashboard', props: { handle } });
     }
   }, [authorized, settings, handle]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const d = new URL(window.location.href).searchParams.get('discount');
+      if (d && !Number.isNaN(Number(d))) {
+        setDiscountParam(Number(d));
+      }
+    }
+  }, []);
 
   // Load referral stats once (requires signed headers)
   useEffect(() => {
@@ -622,6 +636,62 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
 
               {/* RIGHT COLUMN */}
               <aside className="space-y-6">
+                <div
+                  className="p-5 rounded-3xl border shadow-lg"
+                  style={{
+                    background: 'linear-gradient(135deg, #635bff, #7b71ff)',
+                    color: '#fff',
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Enable card checkout</div>
+                      <p className="text-xs text-white/80">
+                        Connect Stripe to accept cards and get payouts. Without it, only wallet is available and cards are disabled for fans.
+                      </p>
+                    </div>
+                    <span className="px-3 py-1 rounded-full text-[11px] bg-white/15 border border-white/25">Stripe Connect</span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    <label className="text-xs text-white/90">Stripe account ID (starts with acct_)</label>
+                    <input
+                      className="w-full rounded-2xl px-3 py-2 text-sm bg-white/15 border border-white/30 text-white placeholder:text-white/70"
+                      placeholder="acct_123..."
+                      value={stripeAccountInput}
+                      onChange={(e) => setStripeAccountInput(e.target.value)}
+                    />
+                    <div className="text-[11px] text-white/80">
+                      Status: {hasStripeAccount ? `Connected (${settings?.stripeAccountId})` : 'Not connected'}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="px-4 py-2 rounded-xl bg-white text-[#0b1424] text-sm shadow hover:-translate-y-[1px] transition"
+                        onClick={async () => {
+                          try {
+                            const r = await fetch(`/api/stripe/connect-link?handle=${encodeURIComponent(handle)}`);
+                            const j = await r.json();
+                            if (j?.url) {
+                              window.location.href = j.url;
+                              return;
+                            }
+                            alert(j?.error || 'Could not start Stripe onboarding');
+                          } catch (e: any) {
+                            alert('Could not start Stripe onboarding');
+                          }
+                        }}
+                      >
+                        Open Stripe Connect
+                      </button>
+                      <button
+                        className="px-4 py-2 rounded-xl bg-black/30 border border-white/30 text-sm text-white hover:bg-black/40 transition"
+                        onClick={() => saveSettings({ stripeAccountId: stripeAccountInput.trim() || null })}
+                      >
+                        Save Stripe ID
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div className={`${glass} p-5 rounded-3xl space-y-4`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -691,16 +761,16 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-semibold">Pricing & SLA</div>
-                      <p className={`${mutedTone} text-xs`}>Tune speed vs. earnings.</p>
+                      <p className={`${mutedTone} text-xs`}>Fans see your SLA. Guaranteed {replyWindowHours}h or refund; Fast Lane can be quicker.</p>
                     </div>
                     <div className={`text-[11px] px-3 py-1 rounded-full ${pill}`}>Escrow tied</div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className={`text-sm ${labelTone}`}>Price (EUR / USDC equiv.)</label>
-                      <input
-                        className={`input ${inputTone}`}
-                        type="number"
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className={`text-sm ${labelTone}`}>Price (EUR / USDC equiv.)</label>
+                    <input
+                      className={`input ${inputTone}`}
+                      type="number"
                         min={1}
                         value={price}
                         onChange={(e) => setPrice(Number(e.target.value))}
@@ -736,9 +806,24 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                         value={fastReplyWindow ?? ''}
                         onChange={(e) => setFastReplyWindow(e.target.value === '' ? null : Number(e.target.value))}
                         placeholder="e.g. 12"
-                      />
+                    />
+                  </div>
+                </div>
+                {discountParam !== null && (
+                  <div className={`text-xs ${hintTone}`}>
+                    Fans see a {discountParam}% launch discount active (via URL param). Adjust pricing/SLA if needed.
+                  </div>
+                )}
+                {!hasStripeAccount && (
+                  <div className={`text-xs ${isPearl ? 'text-amber-700 bg-amber-100/80 border-amber-200' : 'text-amber-100 bg-amber-400/10 border-amber-300/30'} border rounded-xl px-3 py-2 mt-1`}>
+                    Card checkout is disabled until you connect Stripe. Connect to enable payouts and auto-refund flows.
+                    <div className="mt-1">
+                      <a href={stripeConnectLink} className={isPearl ? 'underline text-amber-700' : 'underline text-amber-200'} target="_blank" rel="noreferrer">
+                        Connect Stripe
+                      </a>
                     </div>
                   </div>
+                )}
                   <div className="pt-1">
                     <button className="btn w-full" onClick={() => saveSettings()}>
                       {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Save pricing'}

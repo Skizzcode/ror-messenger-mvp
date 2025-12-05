@@ -37,8 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const {
       creator,           // handle
       fan,               // convenience display of fan (string)
-      amount,            // number
-      ttlHours,          // number
+      amount,            // number (ignored if creator settings exist)
+      ttlHours,          // number (ignored if creator settings exist)
       firstMessage,      // string
       fanPubkey,         // string (wallet)
       creatorPubkey,     // string | null
@@ -82,10 +82,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       safeRef = null;
     }
 
+    // Preise/SLA immer serverseitig aus Creator-Settings ziehen (kein Stale aus Client)
+    const price =
+      creatorEntry && typeof creatorEntry.price === 'number' && creatorEntry.price > 0
+        ? creatorEntry.price
+        : Number(amount) > 0
+        ? Number(amount)
+        : 20;
+    const ttl =
+      creatorEntry && typeof creatorEntry.replyWindowHours === 'number' && creatorEntry.replyWindowHours > 0
+        ? creatorEntry.replyWindowHours
+        : Number(ttlHours) > 0
+        ? Number(ttlHours)
+        : 48;
+
     // IDs / Zeiten
     const id = `t_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const createdAt = Date.now();
-    const deadline = createdAt + Number(ttlHours) * 3600_000;
+    const deadline = createdAt + Number(ttl) * 3600_000;
 
     // Sicherstellen, dass Strukturen existieren
     db.threads = db.threads || {};
@@ -97,7 +111,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       id,
       creator,
       fan,
-      amount: Number(amount) || 20,
+      amount: price,
       createdAt,
       deadline,
       status: 'open',

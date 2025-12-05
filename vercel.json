@@ -4,6 +4,10 @@
     {
       "path": "/api/maintenance/cleanup",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/payout-retry-cron",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

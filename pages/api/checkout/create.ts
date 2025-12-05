@@ -69,12 +69,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     priceNumber = priceNumber * (1 - Number(discountPercent) / 100);
   }
 
+  // Stripe Connect (optional)
+  const platformFeePct = Number(process.env.PLATFORM_FEE_PCT || 0);
+  const stripeAccountId = c?.stripeAccountId || null;
+  const applicationFeeAmount =
+    stripeAccountId && platformFeePct > 0 ? Math.round(priceNumber * 100 * (platformFeePct / 100)) : null;
+
   // 3) Stripe-Session bauen
   const stripeSecret = process.env.STRIPE_SECRET_KEY;
   if (!stripeSecret) {
     return res.status(500).json({ error: 'Stripe not configured' });
   }
+  if (!stripeAccountId) {
+    return res.status(403).json({ error: 'STRIPE_CONNECT_REQUIRED' });
+  }
   const stripe = new Stripe(stripeSecret as string);
+
+  // Ensure the connected account is actually charge/payout ready
+  try {
+    const account = await stripe.accounts.retrieve(stripeAccountId);
+    const missing = account.requirements?.currently_due || [];
+    const ready = !!account.charges_enabled && !!account.payouts_enabled && missing.length === 0;
+    if (!ready) {
+      return res.status(403).json({
+        error: 'STRIPE_CONNECT_ONBOARDING_REQUIRED',
+        accountId: stripeAccountId,
+        missing,
+      });
+    }
+  } catch (e: any) {
+    return res.status(400).json({ error: 'INVALID_STRIPE_ACCOUNT', detail: e?.message || 'lookup_failed' });
+  }
 
   const origin = getOrigin(req);
 
@@ -113,6 +138,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         offerTitle: offerTitle || '',
         discountPercent: discountPercent ? String(discountPercent) : '',
       },
+      payment_intent_data: stripeAccountId
+        ? {
+            application_fee_amount: applicationFeeAmount || 0,
+            transfer_data: {
+              destination: stripeAccountId,
+            },
+          }
+        : undefined,
     });
 
     // 4) Checkout-Vormerkung in DB
