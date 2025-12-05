@@ -384,7 +384,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                     Session active
                   </span>
                   <span className="px-2 py-1 rounded-full bg-white/5 text-white/70 border border-white/10 text-[11px]">
-                    {replyWindowHours}h reply -> auto refund
+                    {`${replyWindowHours}h reply - auto refund`}
                   </span>
                   <span className="px-2 py-1 rounded-full bg-white/5 text-white/70 border border-white/10 text-[11px]">
                     {email ? 'Email on file' : 'Add email for ops'}
