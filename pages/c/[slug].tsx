@@ -27,6 +27,8 @@ export default function ChatPage({ handle }: { handle: string }) {
   const [forceRole, setForceRole] = useState<'fan' | null>(null); // creator can “test as fan”
   const [ref, setRef] = useState<string | null>(null);
   const [showLimitHint, setShowLimitHint] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [noir, setNoir] = useState(false);
 
   // slug used when creating a new thread (chat launched via /c/{creatorHandle})
   const creatorHandle = handle;
@@ -232,6 +234,8 @@ export default function ChatPage({ handle }: { handle: string }) {
 
       t('send_message', { scope: 'chat', props: { threadId: thread.id, role } });
       setText('');
+      setToast('Sent. Creator is notified.');
+      setTimeout(() => setToast(null), 1800);
       mutate();
     } catch (e: any) {
       console.error(e);
@@ -261,6 +265,23 @@ export default function ChatPage({ handle }: { handle: string }) {
           </div>
         </div>
       </header>
+
+      {/* TRUST BAR / CTA */}
+      <section className="bg-gradient-to-r from-emerald-400/20 via-white/10 to-cyan-400/20 border-b border-white/5">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex flex-wrap items-center gap-2 justify-between text-[11px] text-white/70">
+          <div className="flex flex-wrap gap-2">
+            <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Refund SLA: no reply → refund</span>
+            <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Escrowed chats</span>
+            <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Card + wallet</span>
+          </div>
+          <button
+            className="px-3 py-1 rounded-full bg-white/10 border border-white/10 hover:bg-white/15"
+            onClick={() => setNoir((v) => !v)}
+          >
+            {noir ? 'Show color' : 'Noir view'}
+          </button>
+        </div>
+      </section>
 
       {/* === CHAT HEADER (Status + Limit-Badge) === */}
       <header className="z-20 bg-black/10 backdrop-blur-xl border-b border-white/5">
@@ -371,6 +392,7 @@ export default function ChatPage({ handle }: { handle: string }) {
           <div
             ref={listRef}
             className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-white/10"
+            style={{ filter: noir ? 'grayscale(1) contrast(1.05)' : 'none', transition: 'filter 200ms ease' }}
           >
             {messages.map((m: any) => (
               <div
@@ -415,7 +437,7 @@ export default function ChatPage({ handle }: { handle: string }) {
                       return;
                     }
                     try {
-                      t('pay_with_card_click', { scope: 'chat', props: { creator: creatorHandle } });
+                    t('pay_with_card_click', { scope: 'chat', props: { creator: creatorHandle } });
                       const r = await fetch('/api/checkout/create', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -428,9 +450,18 @@ export default function ChatPage({ handle }: { handle: string }) {
                         }),
                       });
                       const j = await r.json();
-                      if (j?.url) window.location.href = j.url;
+                      if (j?.url) {
+                        setToast('Redirecting to secure checkout…');
+                        setTimeout(() => setToast(null), 1500);
+                        window.location.href = j.url;
+                      } else {
+                        setToast('Redirecting to secure checkout…');
+                        setTimeout(() => setToast(null), 1500);
+                      }
                     } catch (e) {
                       console.error(e);
+                      setToast('Checkout failed. Try again.');
+                      setTimeout(() => setToast(null), 2000);
                     }
                   }}
                   className="bg-white text-black text-sm px-4 py-2 rounded-2xl shadow-sm"
@@ -488,6 +519,13 @@ export default function ChatPage({ handle }: { handle: string }) {
             )}
           </div>
         </div>
+
+        {/* Toast */}
+        {toast && (
+          <div className="fixed bottom-4 right-4 px-4 py-2 rounded-xl bg-white text-black text-sm shadow-lg border border-black/5">
+            {toast}
+          </div>
+        )}
       </main>
     </div>
   );

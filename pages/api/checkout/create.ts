@@ -34,6 +34,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const db = await readDB();
   const c = (db.creators || {})[creator] || null;
 
+  // Ref-Self-Check
+  const safeRef = ref && c?.refCode === ref ? null : ref || null;
+
   // 2) Preis & Reply-Fenster priorisieren: Creator-Settings > Body > Defaults
   const priceNumber =
     typeof c?.price === 'number' && c.price > 0
@@ -86,7 +89,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         creator,               // handle
         firstMessage,          // erste Nachricht
         ttlHours: String(replyWindowHours),
-        ref: ref || '',
+        ref: safeRef || '',
         source: 'ror',
       },
     });
@@ -99,7 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       firstMessage,
       amount: priceNumber,
       ttlHours: replyWindowHours,
-      ref: ref || null,
+      ref: safeRef,
       createdAt: Date.now(),
     };
     await writeDB(db);

@@ -30,11 +30,18 @@ export default function AdminPanel() {
   const wallet = useWallet();
   const [authed, setAuthed] = useState(false);
   const [authErr, setAuthErr] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [toast, setToast] = useState<string | null>(null);
 
   const { data, mutate } = useSWR(
     () => (authed ? '/api/admin/overview' : null),
     (u) => fetchJSON(u, { credentials: 'include' as any }),
     { refreshInterval: 20_000 }
+  );
+  const { data: auditData } = useSWR(
+    () => (authed ? '/api/admin/audit?limit=120' : null),
+    (u) => fetchJSON(u, { credentials: 'include' as any }),
+    { refreshInterval: 15_000 }
   );
 
   async function signIn() {
@@ -72,15 +79,26 @@ export default function AdminPanel() {
             <img src="/logo-ror-glass.svg" className="h-9 w-9 rounded-2xl " alt="RoR" />
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight">Reply or Refund</div>
-              <div className="text-[11px] text-white/40">Admin panel</div>
+              <div className="text-[11px] text-white/40">Admin panel · audit & trust</div>
             </div>
           </Link>
           <div className="flex items-center gap-2">
             <WalletMultiButtonDynamic className="!bg-white !text-black !rounded-xl !h-8 !px-3 !py-0 !text-sm" />
-            <button onClick={signIn} className="btn">Admin sign in</button>
+            <button onClick={signIn} className="btn">
+              {authed ? 'Signed in' : 'Admin sign in'}
+            </button>
           </div>
         </div>
       </header>
+
+      {/* Trust strip */}
+      <section className="bg-gradient-to-r from-emerald-400/10 via-white/5 to-cyan-400/10 border-b border-white/10">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center gap-2 text-[11px] text-white/70">
+          <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Audit log: flag/archive</span>
+          <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Admin wallets only</span>
+          <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Encrypted session</span>
+        </div>
+      </section>
 
       {!authed ? (
         <main className="max-w-3xl mx-auto px-4 py-12">
@@ -100,6 +118,54 @@ export default function AdminPanel() {
             <MetricCard label="Messages (loaded)" value={data?.messagesCount ?? 0} />
             <MetricCard label="Admin wallet" value={(wallet.publicKey?.toBase58()?.slice(0, 12) || '') + '…'} muted />
           </div>
+
+          <section className="card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold">Audit log</div>
+                <div className="text-xs text-white/50">Latest admin actions (flag/archive/report)</div>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-white/60">
+                <a className="underline" href="/api/admin/audit?limit=500">Download JSON</a>
+                <a className="underline" href="/api/admin/export?format=csv&type=audit">Download CSV</a>
+                <a className="underline" href="/api/admin/export?format=csv&type=invoices">Invoices CSV</a>
+              </div>
+            </div>
+            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+              {(auditData?.entries || []).slice().reverse().map((ev: any, idx: number) => (
+                <div key={`${ev.ts}-${idx}`} className="p-3 rounded-xl bg-white/5 border border-white/10">
+                  <div className="text-xs text-white/60 flex items-center justify-between gap-2">
+                    <span className="font-semibold">{ev.kind}</span>
+                    <span>{new Date(ev.ts).toLocaleString()}</span>
+                  </div>
+                  <div className="text-[11px] text-white/50 mt-1 flex items-center justify-between gap-2">
+                    <span className="truncate">
+                      Actor: {ev.actor}
+                      {ev.detail?.reviewedBy ? ` · Reviewed by: ${ev.detail.reviewedBy}` : ''}
+                    </span>
+                    <button
+                      className="px-2 py-1 rounded-full bg-white/10 hover:bg-white/20"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(ev.detail || {}, null, 2));
+                        setToast('Copied detail');
+                        setTimeout(() => setToast(null), 1200);
+                      }}
+                    >
+                      Copy detail
+                    </button>
+                  </div>
+                  {ev.detail && (
+                    <div className="text-[11px] text-white/65 mt-2 bg-black/30 border border-white/10 rounded-lg px-2 py-1 whitespace-pre-wrap break-all">
+                      {Object.entries(ev.detail).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`).join(' · ')}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {!auditData?.entries?.length && (
+                <div className="text-sm text-white/40">No audit entries yet.</div>
+              )}
+            </div>
+          </section>
 
           <section className="card p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -124,6 +190,7 @@ export default function AdminPanel() {
                     <th className="text-left py-2">Window</th>
                     <th className="text-left py-2">Ref</th>
                     <th className="text-left py-2">Status</th>
+                    <th className="text-left py-2">Msgs</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -142,10 +209,18 @@ export default function AdminPanel() {
                           <span className="px-2 py-1 rounded-full border border-emerald-400/50 text-emerald-200">Active</span>
                         )}
                       </td>
+                      <td className="py-2">
+                        <button
+                          className="text-[11px] px-2 py-1 rounded-full bg-white/10 hover:bg-white/20"
+                          onClick={() => setExpanded((prev) => ({ ...prev, [c.handle]: !prev[c.handle] }))}
+                        >
+                          {expanded[c.handle] ? 'Hide' : 'Show'}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {!creators.length && (
-                    <tr><td className="py-3 text-white/40" colSpan={7}>No creators yet.</td></tr>
+                    <tr><td className="py-3 text-white/40" colSpan={8}>No creators yet.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -154,26 +229,76 @@ export default function AdminPanel() {
 
           <section className="grid gap-4 md:grid-cols-2">
             <div className="card p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold">Latest threads</div>
-                  <div className="text-xs text-white/50">Newest first</div>
-                </div>
-                <div className="text-[11px] text-white/40">Showing {threads.length}</div>
-              </div>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-                {threads.map((t: any) => (
-                  <div key={t.id} className="p-3 rounded-xl bg-white/5 border border-white/10">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="font-semibold">{t.id.slice(0, 10)}…</div>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10">{t.status}</span>
+              <div className="text-sm font-semibold">Creator messages</div>
+              <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                {creators.map((c: any) => {
+                  const creatorThreads = threads.filter((t: any) => t.creator === c.handle);
+                  const creatorMsgs = messages.filter((m: any) =>
+                    creatorThreads.some((t: any) => t.id === m.threadId)
+                  );
+                  const isOpen = expanded[c.handle];
+                  return (
+                    <div key={c.handle} className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-2 relative overflow-hidden">
+                      {!isOpen && (
+                        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center text-[11px] text-white/70 pointer-events-none">
+                          Click “Show” to reveal messages
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between relative z-10">
+                        <div className="font-semibold">@{c.handle}</div>
+                        <button
+                          className="text-[11px] px-2 py-1 rounded-full bg-white/10 hover:bg-white/20"
+                          onClick={() => setExpanded((prev) => ({ ...prev, [c.handle]: !prev[c.handle] }))}
+                        >
+                          {isOpen ? 'Hide' : 'Show'}
+                        </button>
+                      </div>
+                      <div className={`space-y-1 relative z-10 ${isOpen ? '' : 'opacity-40 blur-[1px]'}`}>
+                        {creatorMsgs.slice(0, 6).map((m: any) => (
+                          <div key={m.id} className="text-xs bg-black/30 rounded-lg px-2 py-1 flex items-center justify-between gap-2">
+                            <div>
+                              <span className="text-white/60 mr-1">{m.from}:</span>
+                              <span>{m.body}</span>
+                            </div>
+                            {isOpen && (
+                              <button
+                                className="text-[10px] px-2 py-1 rounded-full bg-red-400/15 border border-red-400/40"
+                                onClick={async () => {
+                                  try {
+                                    const hdrs = await signAuthHeaders(wallet as any);
+                                    if (!hdrs) { setAuthErr('Connect wallet'); return; }
+                                    await fetch('/api/admin/flag-message', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json', ...hdrs },
+                                      credentials: 'include',
+                                      body: JSON.stringify({
+                                        threadId: m.threadId,
+                                        messageId: m.id,
+                                        reason: 'admin_flag',
+                                        archive: true,
+                                      }),
+                                    });
+                                    setToast('Flagged + archived.');
+                                    setTimeout(() => setToast(null), 1600);
+                                    mutate();
+                                  } catch (e: any) {
+                                    setAuthErr(e?.message || 'Flag failed');
+                                  }
+                                }}
+                              >
+                                Flag+Archive
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {!creatorMsgs.length && (
+                          <div className="text-xs text-white/40">No messages yet.</div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs text-white/50 mt-1">
-                      creator @{t.creator} · fan {t.fan} · €{Number(t.amount || 0).toFixed(2)} · via {t.paid_via}
-                    </div>
-                  </div>
-                ))}
-                {!threads.length && <div className="text-white/40 text-sm">No threads.</div>}
+                  );
+                })}
+                {!creators.length && <div className="text-white/40 text-sm">No creators.</div>}
               </div>
             </div>
 
@@ -200,6 +325,12 @@ export default function AdminPanel() {
             </div>
           </section>
         </main>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-4 right-4 px-4 py-2 rounded-xl bg-white text-black text-sm shadow-lg border border-black/5">
+          {toast}
+        </div>
       )}
     </div>
   );

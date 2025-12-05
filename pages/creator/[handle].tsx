@@ -49,6 +49,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   );
   const authorized = !!authz?.ok;
   const needsVerification = authz?.error === 'EMAIL_NOT_VERIFIED' || authz?.needsVerification;
+  const adminBypass = !!authz?.adminBypass;
   const mustAuth = !authorized && !needsVerification;
 
   // 2) Data nur wenn authorized
@@ -80,6 +81,9 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   const [savingAvatar, setSavingAvatar] = useState(false);
   const [email, setEmail] = useState<string>('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [toast, setToast] = useState<string | null>(null);
+  const [refStats, setRefStats] = useState<any>(null);
+  const [refStatsLoading, setRefStatsLoading] = useState(false);
 
   useEffect(() => {
     if (authorized && settings) {
@@ -92,6 +96,34 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
     }
   }, [authorized, settings, handle]);
 
+  // Load referral stats once (requires signed headers)
+  useEffect(() => {
+    let stop = false;
+    async function loadRefStats() {
+      if (!authorized || !wallet.publicKey || !settings?.refCode) return;
+      setRefStatsLoading(true);
+      try {
+        const hdrs = await signAuthHeaders(wallet as any);
+        const r = await fetch(`/api/ref-stats?code=${encodeURIComponent(settings.refCode)}`, {
+          headers: { ...(hdrs || {}) },
+          credentials: 'include' as any,
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!stop && j?.ok) {
+          setRefStats(j);
+        }
+      } catch {
+        if (!stop) setRefStats(null);
+      } finally {
+        if (!stop) setRefStatsLoading(false);
+      }
+    }
+    loadRefStats();
+    return () => {
+      stop = true;
+    };
+  }, [authorized, wallet.publicKey, settings?.refCode]);
+
   const totals = useMemo(() => {
     const g = threads?.grouped || {};
     return {
@@ -103,10 +135,29 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   }, [threads]);
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const origin = baseUrl || process.env.NEXT_PUBLIC_SITE_URL || '';
   const refLink =
     authorized && settings?.refCode
       ? `${baseUrl}/creator/join?ref=${settings.refCode}`
       : '';
+  const chatLink = `${origin}/c/${handle}`;
+
+  const completeness = useMemo(() => {
+    const checks = [
+      !!displayName,
+      !!avatarDataUrl,
+      !!email,
+      Number(price) > 0,
+      Number(replyWindowHours) > 0,
+    ];
+    const done = checks.filter(Boolean).length;
+    return Math.round((done / checks.length) * 100);
+  }, [displayName, avatarDataUrl, email, price, replyWindowHours]);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 1800);
+  }
 
   async function startSession() {
     // 1x kurz signieren → Cookie holen
@@ -150,6 +201,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
       t('creator_settings_save_success', { scope: 'creator_dashboard', props: { handle } });
       mutateSettings();
       setSaveStatus('saved');
+      showToast('Settings saved');
     } else {
       const j = await r.json().catch(() => ({}));
       t('creator_settings_save_error', { scope: 'creator_dashboard', props: { handle, err: j?.error || 'unknown' } });
@@ -185,6 +237,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
           } else {
             t('creator_avatar_upload_success', { scope: 'creator_dashboard', props: { handle } });
             mutateSettings();
+            showToast('Avatar updated');
           }
         } finally {
           setSavingAvatar(false);
@@ -230,7 +283,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
       </header>
 
       {/* GATE */}
-      {!authorized ? (
+      {!authorized && !adminBypass ? (
         <main className="max-w-5xl mx-auto px-4 py-16">
           <div className="max-w-lg mx-auto card p-6 text-center">
             <div className="text-lg font-semibold mb-1">Creator dashboard</div>
@@ -253,7 +306,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
             )}
           </div>
         </main>
-      ) : needsVerification ? (
+      ) : needsVerification && !adminBypass ? (
         <main className="max-w-5xl mx-auto px-4 py-16">
           <div className="max-w-lg mx-auto card p-6 space-y-4 text-center">
             <div className="text-lg font-semibold">Verify your email</div>
@@ -287,6 +340,41 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
           <main className="max-w-5xl mx-auto px-4 py-6 grid gap-6 md:grid-cols-3">
             {/* LEFT */}
             <section className="md:col-span-2 space-y-6">
+              {/* Session / trust strip */}
+              <div className="card p-3 rounded-2xl flex flex-wrap items-center gap-3 justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="px-2 py-1 rounded-full bg-emerald-400/10 text-emerald-100 border border-emerald-400/30 text-[11px]">
+                    Session active
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-white/5 text-white/70 border border-white/10 text-[11px]">
+                    {replyWindowHours}h reply → auto refund
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-white/5 text-white/70 border border-white/10 text-[11px]">
+                    {email ? 'Email on file' : 'Add email for ops'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-white/50">
+                  Fans see your SLA badge. Keep replies inside the window to unlock escrow.
+                </div>
+              </div>
+
+              {/* Profile completeness */}
+              <div className="card p-4 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between text-sm font-semibold">
+                  <span>Profile completeness</span>
+                  <span className="text-xs text-white/60">{completeness}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-400 to-cyan-300 transition-all"
+                    style={{ width: `${completeness}%` }}
+                  />
+                </div>
+                <div className="text-[11px] text-white/50">
+                  Fill email, name, avatar, price, reply window to boost trust on your public page.
+                </div>
+              </div>
+
               {/* STATS */}
               <div className="grid grid-cols-4 gap-3">
                 <div className="p-3 rounded-xl  col-span-4 md:col-span-2 bg-white/5">
@@ -424,9 +512,32 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                 <button className="btn w-full" onClick={() => saveSettings()}>
                   {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Save'}
                 </button>
+                {saveStatus === 'saved' && (
+                  <div className="text-[11px] text-emerald-200 text-center">Saved ✓</div>
+                )}
                 {saveStatus === 'error' && (
                   <div className="text-[11px] text-red-300 text-center">Save failed</div>
                 )}
+              </div>
+
+              {/* Referral earnings */}
+              <div className="card p-4 space-y-2">
+                <div className="font-semibold">Referral earnings</div>
+                <div className="text-sm text-white/60">
+                  Earn from creators who onboard with your code.
+                </div>
+                <div className="p-3 rounded-2xl bg-black/30">
+                  <div className="text-xs text-white/50">Creators referred</div>
+                  <div className="text-xl font-semibold">
+                    {refStatsLoading ? '…' : refStats?.creatorsCount ?? 0}
+                  </div>
+                  <div className="text-xs text-white/50 mt-1">
+                    Earned (answered): €{refStatsLoading ? '…' : (refStats?.totals?.revenueAnswered ?? 0).toFixed(2)}
+                  </div>
+                </div>
+                <Link href="/creator/join" className="text-[12px] text-emerald-200 underline">
+                  How referrals work
+                </Link>
               </div>
 
               {/* referral */}
@@ -455,9 +566,34 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                   </div>
                 )}
               </div>
+
+              {/* Share kit */}
+              <div className="card p-4 space-y-3">
+                <div className="font-semibold">Share your chat</div>
+                <div className="text-sm text-white/60">Copy your chat link or use the asset for socials.</div>
+                <div className="input break-all">{chatLink}</div>
+                <button
+                  className="btn w-full"
+                  onClick={() => {
+                    navigator.clipboard.writeText(chatLink);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1600);
+                  }}
+                >
+                  Copy chat link
+                </button>
+                <Link href="/logo-ror-glass.svg" className="text-[12px] text-emerald-200 underline">
+                  Download share asset
+                </Link>
+              </div>
             </aside>
           </main>
         </>
+      )}
+      {toast && (
+        <div className="fixed bottom-4 right-4 px-4 py-2 rounded-xl bg-white text-black text-sm shadow-lg border border-black/5">
+          {toast}
+        </div>
       )}
     </div>
   );
@@ -511,6 +647,7 @@ function VerificationForm({ handle, onVerified }: { handle: string; onVerified: 
   const wallet = useWallet();
   const [code, setCode] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   async function submit() {
     if (!code.trim()) return;
@@ -550,6 +687,35 @@ function VerificationForm({ handle, onVerified }: { handle: string; onVerified: 
       />
       <button className="btn w-full" onClick={submit} disabled={status === 'submitting'}>
         {status === 'submitting' ? 'Verifying…' : 'Verify email'}
+      </button>
+      <button
+        className="btn w-full"
+        onClick={async () => {
+          setResendStatus('sending');
+          try {
+            const hdrs = await signAuthHeaders(wallet as any);
+            if (!hdrs) {
+              alert('Connect a wallet that supports message signing.');
+              setResendStatus('idle');
+              return;
+            }
+            const r = await fetch('/api/creator/send-code', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...hdrs },
+              credentials: 'include',
+              body: JSON.stringify({ handle }),
+            });
+            if (!r.ok) throw new Error('send_failed');
+            setResendStatus('sent');
+          } catch {
+            setResendStatus('error');
+          } finally {
+            setTimeout(() => setResendStatus('idle'), 1500);
+          }
+        }}
+        disabled={resendStatus === 'sending'}
+      >
+        {resendStatus === 'sending' ? 'Sending…' : resendStatus === 'sent' ? 'Sent' : 'Resend code'}
       </button>
       <div className="text-[11px] text-white/50">We require email verification to protect creators and fans.</div>
     </div>

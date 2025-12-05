@@ -47,7 +47,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ts: Date.now(),
     kind: 'flag_message',
     actor: auth.wallet,
-    detail: { threadId: cleanThread, messageId: cleanMessage, reason: msg.flagReason, archive: !!archive },
+    detail: {
+      threadId: cleanThread,
+      messageId: cleanMessage,
+      reason: msg.flagReason,
+      archive: !!archive,
+      reviewedBy: auth.wallet,
+    },
   });
 
   return res.status(200).json({ ok: true, flagged: true, archived: !!archive });

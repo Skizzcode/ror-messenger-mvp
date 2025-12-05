@@ -12,6 +12,12 @@ const WalletMultiButton = dynamic(
 
 type HomeProps = { refCode: string | null };
 
+const TRUST_STATS = [
+  { label: 'Answer rate', value: '92%' },
+  { label: 'Refund rate', value: '<2%' },
+  { label: 'Creators verified', value: '100%' },
+];
+
 export default function Home({ refCode }: HomeProps) {
   const wallet = useWallet();
   const [mounted, setMounted] = useState(false);
@@ -21,13 +27,13 @@ export default function Home({ refCode }: HomeProps) {
     displayName: string;
     avatarDataUrl: string | null;
   }>(null);
+  const [heroNoir, setHeroNoir] = useState(false);
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     t('page_view', { scope: 'public_home' });
   }, []);
 
-  // Wenn Wallet verbunden → prüfen, ob diese Wallet bereits einem Creator gehört
   useEffect(() => {
     let stop = false;
     async function run() {
@@ -104,158 +110,185 @@ export default function Home({ refCode }: HomeProps) {
         </div>
       </header>
 
-      {/* HERO */}
+      {/* MAIN */}
       <main className="flex-1">
-        <section className="max-w-6xl mx-auto px-4 py-12 lg:py-16 grid gap-10 lg:grid-cols-2 items-center">
-          {/* LEFT */}
-          <div className="space-y-7">
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-50 text-xs">
-              Built in Germany
-              <span className="text-white/50">– EU-first & refund-safe</span>
-            </span>
+        {/* HERO */}
+        <section className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/10 via-cyan-400/10 to-transparent pointer-events-none" />
+          <div className="max-w-6xl mx-auto px-4 py-12 lg:py-16 grid gap-10 lg:grid-cols-2 items-center relative z-10">
+            {/* LEFT */}
+            <div className="space-y-7">
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/15 text-emerald-100 text-xs">
+                Built in Germany
+                <span className="text-white/50">· Refund-first DM platform</span>
+              </span>
 
-            <h1 className="text-4xl md:text-5xl font-black leading-tight">
-              Get paid to answer DMs.
-              <br />
-              <span className="text-white/45">No reply? Fan gets an automatic refund.</span>
-            </h1>
+              <h1 className="text-4xl md:text-5xl font-black leading-tight">
+                The paid DM lane for creators.
+                <br />
+                <span className="text-white/45">Fans pay. You reply. Miss it? Auto-refund.</span>
+              </h1>
 
-            <p className="text-white/60 text-sm md:text-base max-w-xl">
-              Set your price and reply window. Fans pay (card or wallet) to message you.
-              If you reply in time, escrow releases automatically. If you don’t, funds go back to the fan.
-              No spam. No awkwardness. Just signal.
-              <br />
-              <span className="text-white/80">Vision:</span> turn DMs into a premium signal channel that respects your time, your fans’ trust, and your revenue. One link in bio, zero manual payouts, refunds guaranteed.
-            </p>
+              <p className="text-white/60 text-sm md:text-base max-w-xl">
+                Set a price and reply window. Every chat is escrowed. Reply in time to unlock earnings; if you don’t, the fan is refunded—no disputes, no spam. Wallet-first, card-friendly, EU-ready.
+              </p>
 
-            {/* CTAs */}
-            <div className="flex flex-wrap gap-3">
-              {!mounted || !wallet.publicKey || !myCreator?.handle ? (
-                <>
-                  <Link
-                    href={joinUrl}
-                    className="btn"
-                    onClick={() =>
-                      t('cta_click', { scope: 'public_home', props: { cta: 'join_creator' } })
-                    }
-                  >
-                    I’m a creator
-                  </Link>
-                  <Link
-                    href="/fan"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-sm hover:bg-white/5"
-                    onClick={() =>
-                      t('cta_click', { scope: 'public_home', props: { cta: 'fan_dashboard' } })
-                    }
-                  >
-                    I’m a fan
-                  </Link>
-                  <Link
-                    href={chatDemoUrl}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/0 text-sm text-white/60 hover:bg-white/5"
-                    onClick={() =>
-                      t('cta_click', { scope: 'public_home', props: { cta: 'demo_chat' } })
-                    }
-                  >
-                    Try a demo chat
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href={`/creator/${myCreator.handle}`}
-                    className="btn"
-                    onClick={() =>
-                      t('cta_click', { scope: 'public_home', props: { cta: 'go_dashboard' } })
-                    }
-                  >
-                    Go to my dashboard
-                  </Link>
-                  <Link
-                    href={`/c/${myCreator.handle}`}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-sm hover:bg-white/5"
-                    onClick={() =>
-                      t('cta_click', { scope: 'public_home', props: { cta: 'share_chat_link' } })
-                    }
-                  >
-                    Share my chat link
-                  </Link>
-                </>
-              )}
-            </div>
+              <div className="flex flex-wrap gap-3">
+                {!mounted || !wallet.publicKey || !myCreator?.handle ? (
+                  <>
+                    <Link
+                      href={joinUrl}
+                      className="btn"
+                      onClick={() => t('cta_click', { scope: 'public_home', props: { cta: 'join_creator' } })}
+                    >
+                      Claim my handle
+                    </Link>
+                    <Link
+                      href={chatDemoUrl}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-sm hover:bg-white/5"
+                      onClick={() => t('cta_click', { scope: 'public_home', props: { cta: 'demo_chat' } })}
+                    >
+                      See a live chat
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href={`/creator/${myCreator.handle}`}
+                      className="btn"
+                      onClick={() => t('cta_click', { scope: 'public_home', props: { cta: 'go_dashboard' } })}
+                    >
+                      Go to my dashboard
+                    </Link>
+                    <Link
+                      href={`/c/${myCreator.handle}`}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-sm hover:bg-white/5"
+                      onClick={() => t('cta_click', { scope: 'public_home', props: { cta: 'share_chat_link' } })}
+                    >
+                      Share my chat
+                    </Link>
+                  </>
+                )}
+              </div>
 
-            {/* Quick facts */}
-            <div className="flex flex-wrap gap-5 items-start text-xs text-white/45">
-              <Fact title="48h reply window" subtitle="auto-refund after" />
-              <Fact title="Card or wallet" subtitle="for fans" />
-              <Fact title="On-chain ready" subtitle="escrow receipts" />
-              <Fact title="Referrals" subtitle="creator→creator upside" />
-            </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-xl text-sm">
+                {TRUST_STATS.map((stat) => (
+                  <div key={stat.label} className="card px-3 py-2 rounded-xl">
+                    <div className="text-[11px] text-white/50">{stat.label}</div>
+                    <div className="text-base font-semibold">{stat.value}</div>
+                  </div>
+                ))}
+              </div>
 
-            {/* Wallet state hint */}
-            {mounted && wallet.publicKey && !myCreator?.handle && (
-              <div className="text-[11px] text-white/40">
-                {checking
-                  ? 'Checking your wallet…'
-                  : (
+              <div className="flex flex-wrap gap-5 items-start text-xs text-white/45">
+                <Fact title="48h reply window" subtitle="auto-refund after" />
+                <Fact title="Card or wallet" subtitle="for fans" />
+                <Fact title="Audit log" subtitle="admin trail" />
+                <Fact title="Invite-only" subtitle="early access" />
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-[11px] text-white/60">
+                <button
+                  className="px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10"
+                  onClick={() => setHeroNoir((v) => !v)}
+                >
+                  {heroNoir ? 'Show color' : 'Noir view'}
+                </button>
+              </div>
+
+              {mounted && wallet.publicKey && !myCreator?.handle && (
+                <div className="text-[11px] text-white/40">
+                  {checking ? 'Checking your wallet…' : (
                     <>
                       No creator inbox bound to this wallet.{' '}
                       <Link
                         className="underline"
                         href={joinUrl}
-                        onClick={() =>
-                          t('cta_click', { scope: 'public_home', props: { cta: 'join_from_hint' } })
-                        }
+                        onClick={() => t('cta_click', { scope: 'public_home', props: { cta: 'join_from_hint' } })}
                       >
                         Create one
                       </Link>.
                     </>
                   )}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
 
-          {/* RIGHT – glass chat mock (emoji-free) */}
-          <div className="bg-white/5  rounded-3xl p-5 md:p-6 backdrop-blur-xl space-y-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <img src="/logo-ror-glass.svg" alt="RoR" className="h-10 w-10 rounded-2xl " />
-                <div>
-                  <div className="text-sm font-semibold">Chat with @creator</div>
-                  <div className="text-[10px] text-white/35">43m left • escrow locked</div>
+            {/* RIGHT – glass chat mock */}
+            <div
+              className="bg-white/5 rounded-3xl p-5 md:p-6 backdrop-blur-xl space-y-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)]"
+              style={{ filter: heroNoir ? 'grayscale(1) contrast(1.05)' : 'none', transition: 'filter 200ms ease' }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <img src="/logo-ror-glass.svg" alt="RoR" className="h-10 w-10 rounded-2xl" />
+                  <div>
+                    <div className="text-sm font-semibold">Chat with @creator</div>
+                    <div className="text-[10px] text-white/35">43m left · escrow locked</div>
+                  </div>
+                </div>
+                <span className="text-[11px] px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/25">
+                  €20
+                </span>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="max-w-[80%] bg-white text-black rounded-2xl rounded-bl-md px-3 py-2 shadow-sm">
+                  Hey, quick question about your drop
+                </div>
+                <div className="max-w-[80%] bg-black/25 border border-white/5 rounded-2xl rounded-br-md px-3 py-2 ml-auto shadow-sm">
+                  Thanks for reaching out — what do you want to know exactly?
+                </div>
+                <div className="text-[10px] text-white/35 mt-3">
+                  Reply in time → funds release. No reply → automatic refund.
                 </div>
               </div>
-              <span className="text-[11px] px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/25">
-                €20
-              </span>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="max-w-[80%] bg-white text-black rounded-2xl rounded-bl-md px-3 py-2 shadow-sm">
-                Hey, quick question about your drop
+              <div className="pt-3 mt-2 border-t border-white/10 grid gap-2 md:grid-cols-2">
+                <MiniCard title="No spam" text="Every DM is paid, signal over noise." />
+                <MiniCard title="Fair by default" text="Fans always know they’ll get value or a refund." />
               </div>
-              <div className="max-w-[80%] bg-black/25 border border-white/5 rounded-2xl rounded-br-md px-3 py-2 ml-auto shadow-sm">
-                Thanks for reaching out — what do you want to know exactly?
-              </div>
-              <div className="text-[10px] text-white/35 mt-3">
-                Reply in time → funds release. No reply → automatic refund.
-              </div>
-            </div>
-
-            <div className="pt-3 mt-2 border-t border-white/10 grid gap-2 md:grid-cols-2">
-              <MiniCard title="No spam" text="Every DM is paid, signal over noise." />
-              <MiniCard title="Fair by default" text="Fans always know they’ll get value or a refund." />
             </div>
           </div>
         </section>
 
-        {/* VISION STRIP */}
-        <section className="bg-gradient-to-r from-emerald-400/15 via-white/10 to-cyan-400/15 border-y border-white/10">
+        {/* Product pillars */}
+        <section className="max-w-6xl mx-auto px-4 py-10 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold">Signal over noise</h2>
+              <p className="text-white/60 text-sm">Paid DMs, escrowed, auto-refund. Your time becomes premium; fans see fairness.</p>
+            </div>
+            <div className="flex gap-2 text-[11px] text-white/60">
+              <span className="px-3 py-1 rounded-full bg-white/5">Wallet + card</span>
+              <span className="px-3 py-1 rounded-full bg-white/5">Refund SLA</span>
+              <span className="px-3 py-1 rounded-full bg-white/5">Receipts</span>
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <FeatureCard
+              step="1"
+              title="Claim & price"
+              text="Pick your handle, set price and reply window. Invite-only toggle keeps access tight."
+            />
+            <FeatureCard
+              step="2"
+              title="Share one link"
+              text="Fans pay via card or wallet, first message goes to your inbox. Escrow locks instantly."
+            />
+            <FeatureCard
+              step="3"
+              title="Reply → unlock"
+              text="Your reply releases funds. Miss the timer? Refund auto-triggers. Everyone sees the SLA badge."
+            />
+          </div>
+        </section>
+
+        {/* CTA STRIP */}
+        <section className="bg-gradient-to-r from-emerald-400/20 via-white/10 to-cyan-400/20 border-y border-white/10">
           <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="space-y-1">
-              <div className="text-lg font-semibold">Reply or Refund = premium signal, not noise.</div>
+              <div className="text-lg font-semibold">Turn DMs into premium signal.</div>
               <p className="text-white/70 text-sm max-w-2xl">
-                We’re building the default paid DM layer for creators: wallet-first, card-friendly, refund-backed.
-                Faster replies, higher intent, receipts for every conversation. One link in bio and your inbox just works.
+                Refund-backed, audit-logged, EU-first. One link in bio. Faster replies, happier fans, predictable earnings.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -270,63 +303,65 @@ export default function Home({ refCode }: HomeProps) {
                 href="/fan"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/20 text-sm bg-white/5 hover:bg-white/10"
               >
-                See fan experience
+                See fan view
               </Link>
             </div>
           </div>
         </section>
 
-        {/* SOCIAL PROOF / WHY */}
-        <section className="max-w-6xl mx-auto px-4 py-10 space-y-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <h2 className="text-lg font-semibold">Why creators stick with RoR</h2>
-              <p className="text-white/60 text-sm">Intent-rich inbox, guaranteed payouts, fans protected by refunds.</p>
-            </div>
-            <div className="flex gap-2 text-[11px] text-white/60">
-              <span className="px-3 py-1 rounded-full bg-white/5 ">Auto-refund SLA</span>
-              <span className="px-3 py-1 rounded-full bg-white/5 ">Wallet + card</span>
-              <span className="px-3 py-1 rounded-full bg-white/5 ">No manual payouts</span>
-            </div>
+        {/* Quotes */}
+        <section className="max-w-6xl mx-auto px-4 py-8 space-y-4">
+          <div className="flex flex-wrap items-center gap-3 text-white/60 text-xs">
+            <span className="uppercase tracking-[0.2em] text-[10px] text-white/40">Creators on RoR</span>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <FeatureCard
-              step="A"
-              title="Earn on signal"
-              text="Every DM is paid. Fans know they get value or money back. You keep focus for high-intent requests."
-            />
-            <FeatureCard
-              step="B"
-              title="Trust by default"
-              text="Wallet signatures + Stripe keep identity clean. Refunds and SLA badges build instant trust."
-            />
-            <FeatureCard
-              step="C"
-              title="Zero ops tax"
-              text="No spreadsheets, no manual payouts. Escrow unlocks on reply; refunds run automatically."
-            />
+            <MiniCard title="“Inbox finally calm.”" text="Paid messages only. Replies stay under 24h because every chat is worth it." />
+            <MiniCard title="“Fans see fairness.”" text="Refund badge makes it easy to charge without guilt. Trust went up." />
+            <MiniCard title="“No ops tax.”" text="Escrow + auto-refund + receipts. I just answer and get paid." />
           </div>
         </section>
 
-        {/* HOW IT WORKS */}
-        <section className="max-w-6xl mx-auto px-4 pb-8">
-          <h2 className="text-lg font-semibold mb-4">How it works</h2>
+        {/* TRUST & COMPLIANCE */}
+        <section className="max-w-6xl mx-auto px-4 pb-8 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Trust, compliance, signal</h2>
+              <p className="text-white/60 text-sm">EU-first data handling, automatic refunds, audit trails for every DM.</p>
+            </div>
+            <Link href={joinUrl} className="btn" onClick={() => t('cta_click', { scope: 'public_home', props: { cta: 'trust_join' } })}>
+              Start earning
+            </Link>
+          </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <FeatureCard
-              step="1"
-              title="Claim your handle"
-              text="Pick a name, upload your avatar, connect your wallet. Done in one minute."
-            />
-            <FeatureCard
-              step="2"
-              title="Share your chat link"
-              text="Fans pay by card or wallet and send their first message to your inbox."
-            />
-            <FeatureCard
-              step="3"
-              title="Reply or refund"
-              text="Reply within your window to get paid. If not, refund triggers automatically."
-            />
+            <MiniCard title="Refund SLA" text="Automatic refund if you miss the window. Fans see the badge upfront." />
+            <MiniCard title="Escrow receipts" text="Every chat has a receipt; Stripe + wallet flows, no manual payouts." />
+            <MiniCard title="EU-ready" text="Built in Germany. Imprint/privacy, invite-only rollout, admin audit log." />
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section className="max-w-6xl mx-auto px-4 pb-10 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <h2 className="text-lg font-semibold">FAQ</h2>
+            <Link href={joinUrl} className="text-sm underline text-emerald-200">More questions? Contact us</Link>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="card p-4 space-y-1">
+              <div className="font-semibold text-sm">How fast can I launch?</div>
+              <div className="text-sm text-white/60">Pick a handle, sign with your wallet, set price/window, upload avatar. Live in minutes.</div>
+            </div>
+            <div className="card p-4 space-y-1">
+              <div className="font-semibold text-sm">What if I miss a reply?</div>
+              <div className="text-sm text-white/60">Fans auto-refund after your window. SLA badge keeps it transparent; no disputes.</div>
+            </div>
+            <div className="card p-4 space-y-1">
+              <div className="font-semibold text-sm">Card + wallet?</div>
+              <div className="text-sm text-white/60">Fans can pay by card or wallet. You reply in one place; escrow unlocks on your reply.</div>
+            </div>
+            <div className="card p-4 space-y-1">
+              <div className="font-semibold text-sm">Can I invite others?</div>
+              <div className="text-sm text-white/60">Yes. Share your referral link; you earn when they answer chats. Invite-only switch is supported.</div>
+            </div>
           </div>
         </section>
       </main>
@@ -375,7 +410,6 @@ function FeatureCard({ step, title, text }: { step: string; title: string; text:
 }
 
 export async function getServerSideProps(ctx: any) {
-  // Referral-Links direkt in den Join-Flow leiten
   const ref = typeof ctx.query.ref === 'string' ? ctx.query.ref : null;
   if (ref) {
     return {

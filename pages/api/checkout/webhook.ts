@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import Stripe from 'stripe';
 import { readDB, writeDB } from '../../../lib/db';
 import { track } from '../../../lib/telemetry';
+import { sendNewThreadEmail } from '../../../lib/mail';
 
 // Wichtig: Raw-Body fuer Stripe-Signatur
 export const config = { api: { bodyParser: false } };
@@ -115,6 +116,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
 
       await writeDB(db);
+
+      // Notify creator via email if verified
+      const creatorEntry = (db.creators || {})[creator];
+      if (creatorEntry?.email && creatorEntry?.emailVerified) {
+        await sendNewThreadEmail({
+          creator,
+          email: creatorEntry.email,
+          threadId: id,
+          amount,
+        });
+      }
 
       await track({
         event: 'chat_started',

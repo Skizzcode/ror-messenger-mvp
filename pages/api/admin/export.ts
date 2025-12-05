@@ -28,6 +28,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const creators = Object.values<any>(db.creators || {});
   const threads = Object.values<any>(db.threads || {});
+  const audit = Array.isArray((db as any).audit) ? (db as any).audit : [];
+  const messages = db.messages || {};
 
   if (format === 'csv') {
     if (type === 'creators') {
@@ -65,6 +67,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.setHeader('Content-Disposition', 'attachment; filename="threads.csv"');
       return res.status(200).send(toCsv(rows, headers));
     }
+
+    if (type === 'invoices' || type === 'accounting') {
+      const headers = [
+        'threadId',
+        'creatorHandle',
+        'creatorWallet',
+        'fanWallet',
+        'amount',
+        'currency',
+        'status',
+        'paid_via',
+        'refCode',
+        'createdAt',
+        'answeredAt',
+        'refundedAt',
+        'messagesCount',
+      ];
+      const rows = threads.map((t: any) => {
+        const creator = (db.creators || {})[t.creator] || {};
+        const msgs = Array.isArray(messages[t.id]) ? messages[t.id] : [];
+        return {
+          threadId: t.id,
+          creatorHandle: t.creator,
+          creatorWallet: creator.wallet || '',
+          fanWallet: t.fan || t.fan_pubkey || '',
+          amount: t.amount,
+          currency: 'EUR', // UI is priced in EUR / USDC-equiv
+          status: t.status,
+          paid_via: t.paid_via || '',
+          refCode: t.ref || '',
+          createdAt: t.createdAt || '',
+          answeredAt: t.answeredAt || '',
+          refundedAt: t.refundedAt || '',
+          messagesCount: msgs.length || 0,
+        };
+      });
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=\"invoices.csv\"');
+      return res.status(200).send(toCsv(rows, headers));
+    }
+
+    if (type === 'audit') {
+      const headers = ['ts', 'kind', 'actor', 'detail'];
+      const rows = audit.map((a: any) => ({
+        ts: a.ts,
+        kind: a.kind,
+        actor: a.actor,
+        detail: a.detail ? JSON.stringify(a.detail) : '',
+      }));
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="audit.csv"');
+      return res.status(200).send(toCsv(rows, headers));
+    }
   }
 
   // default JSON
@@ -72,6 +127,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ok: true,
     creators,
     threads,
-    messages: db.messages || {},
+    audit,
+    messages,
   });
 }

@@ -4,6 +4,7 @@ import { readDB, writeDB } from '../../lib/db';
 import * as Verify from '../../lib/verify';
 import { apiErr, apiOk } from '../../lib/api';
 import { track } from '../../lib/telemetry';
+import { sendNewThreadEmail } from '../../lib/mail';
 
 const DRIFT_MS = 5 * 60 * 1000; // ±5 Minuten
 
@@ -75,6 +76,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return apiErr(req, res, 403, 'CREATOR_BANNED');
     }
 
+    // Ref-Self-Check
+    let safeRef = ref || null;
+    if (safeRef && creatorEntry?.refCode === safeRef) {
+      safeRef = null;
+    }
+
     // IDs / Zeiten
     const id = `t_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const createdAt = Date.now();
@@ -97,7 +104,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       fan_pubkey: fanPubkey || pubkeyBase58,
       creator_pubkey: creatorPubkey || null,
       paid_via: 'wallet',
-      ref: ref || null,
+      ref: safeRef,
     };
 
     // Erste Nachricht (Fan)
@@ -119,6 +126,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     await writeDB(db);
+
+    // Notify creator via email if verified
+    if (creatorEntry?.email && creatorEntry?.emailVerified) {
+      await sendNewThreadEmail({
+        creator,
+        email: creatorEntry.email,
+        threadId: id,
+        amount: Number(amount) || 20,
+      });
+    }
 
     // Telemetry
     await track({ event: 'chat_started', scope: 'public', handle: creator, threadId: id });

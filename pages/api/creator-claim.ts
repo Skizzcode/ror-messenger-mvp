@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB, writeDB, type DB } from '../../lib/db';
 import { checkRequestAuth } from '../../lib/auth';
+import { sendVerificationEmail } from '../../lib/mail';
 
 function ensureCreatorsMap(db: DB) { db.creators = db.creators || {}; }
 
@@ -45,6 +46,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const refOwner = ref ? Object.values<any>(creators).find((c: any) => c?.refCode === ref) : null;
   if (inviteOnly && (!ref || !refOwner)) {
     return res.status(403).json({ error: 'Invite required (invalid referral code)' });
+  }
+
+  if (refOwner && refOwner.handle === cleanHandle) {
+    return res.status(400).json({ error: 'SELF_REFERRAL_FORBIDDEN' });
   }
 
   if (creators[cleanHandle]) {
@@ -93,6 +98,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   entry.wallet = auth.wallet!;
 
   await writeDB(db);
+  if (entry.email && entry.emailCode) {
+    await sendVerificationEmail(cleanHandle, entry.email, entry.emailCode);
+  }
+
   return res.json({ ok: true, handle: cleanHandle, verificationCode: entry.emailCode || null });
 }
 

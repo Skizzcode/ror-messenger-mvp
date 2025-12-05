@@ -2,6 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { readDB } from '../../lib/db';
 import { checkRequestAuth } from '../../lib/auth';
+import { isAdminWallet } from '../../lib/admin';
 
 /**
  * Returns { ok: true } only if:
@@ -45,7 +46,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (auth.viaSessionHandle && auth.viaSessionHandle !== rawHandle) {
       return res.status(403).json({ ok: false, error: 'SESSION_HANDLE_MISMATCH' });
     }
-    if (!creator.emailVerified) {
+    const adminBypass = isAdminWallet(auth.wallet);
+    if (!creator.emailVerified && !adminBypass) {
       return res.status(403).json({ ok: false, error: 'EMAIL_NOT_VERIFIED', needsVerification: true });
     }
 
@@ -53,6 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ok: true,
       handle: creator.handle,
       wallet: creator.wallet,
+      adminBypass,
       via: 'wallet-session',
     });
   } catch (e: any) {

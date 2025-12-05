@@ -50,7 +50,7 @@ export default function FanDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-white">
+    <div className="min-h-screen bg-background text-white flex flex-col">
       {/* GLOBAL HEADER */}
       <header className="sticky top-0 z-30 bg-background/70 backdrop-blur border-b border-white/10">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -58,11 +58,11 @@ export default function FanDashboard() {
             <img
               src="/logo-ror-glass.svg"
               alt="RoR"
-              className="h-10 w-10 rounded-2xl border border-white/10"
+              className="h-10 w-10 rounded-2xl shadow-lg"
             />
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight">Reply or Refund</div>
-              <div className="text-[10px] text-white/40">Paid DMs for creators</div>
+              <div className="text-[10px] text-white/40">Fan inbox</div>
             </div>
           </Link>
           <div className="flex items-center gap-3">
@@ -76,7 +76,35 @@ export default function FanDashboard() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6 grid gap-6 md:grid-cols-3">
+      {/* TRUST STRIP */}
+      <section className="bg-gradient-to-r from-emerald-400/20 via-white/10 to-cyan-400/20 border-b border-white/10">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-2 text-[11px] text-white/70">
+          <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Refund SLA: auto-refund on timeout</span>
+          <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Escrowed chats</span>
+          <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Card + wallet</span>
+        </div>
+      </section>
+
+      {/* HERO */}
+      <section className="max-w-5xl mx-auto px-4 py-6">
+        <div className="card p-5 rounded-3xl flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-white/70">Your paid chats</div>
+            <div className="text-xl font-bold">See remaining time, refunds, and replies in one place.</div>
+            <div className="text-sm text-white/60 mt-1">Only chats you paid for show up here. If a creator misses the window, you’re refunded automatically.</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/c/creator-demo" className="btn" onClick={() => t('cta_click', { scope: 'fan_inbox', props: { cta: 'demo_chat' } })}>
+              View demo chat
+            </Link>
+            <Link href="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/20 text-sm bg-white/5 hover:bg-white/10">
+              Back to home
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <main className="max-w-5xl mx-auto px-4 pb-10 grid gap-6 md:grid-cols-3">
         {/* LEFT: Overview */}
         <section className="md:col-span-2 space-y-6">
           {!pubkey && (
@@ -142,6 +170,11 @@ export default function FanDashboard() {
               <li>Answered chats auto-release escrow after a substantial reply.</li>
               <li>Refunded chats returned after timeout if no reply.</li>
             </ul>
+          </div>
+          <div className="card p-4 space-y-2">
+            <div className="font-semibold">Need help?</div>
+            <div className="text-sm text-white/60">Keep your wallet connected so refunds and replies stay in sync. For issues, reconnect and refresh.</div>
+            <Link href="/" className="text-[12px] underline text-emerald-200">Back to homepage</Link>
           </div>
         </aside>
       </main>
