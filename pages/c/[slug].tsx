@@ -46,6 +46,8 @@ export default function ChatPage({ handle }: { handle: string }) {
       if (r) setRef(r);
       const d = u.searchParams.get('discount');
       if (d && !Number.isNaN(Number(d))) setDiscountPercent(Number(d));
+      const off = u.searchParams.get('offer');
+      if (off) setSelectedOfferId(off);
     }
   }, []);
 
@@ -236,7 +238,7 @@ export default function ChatPage({ handle }: { handle: string }) {
             <img
               src="/logo-ror-glass.svg"
               alt="RoR"
-              className="h-8 w-8 rounded-2xl  shadow-sm"
+              className="h-12 w-12 rounded-2xl  shadow-sm"
             />
             <span className="font-semibold tracking-tight group-hover:opacity-80 transition">
               Reply or Refund

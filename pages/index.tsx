@@ -84,7 +84,7 @@ export default function Home({ refCode }: HomeProps) {
             <img
               src="/logo-ror-glass.svg"
               alt="RoR"
-              className="h-10 w-10 rounded-2xl shadow-lg"
+              className="h-12 w-12 rounded-2xl shadow-lg"
             />
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight">Reply or Refund</div>
@@ -114,7 +114,7 @@ export default function Home({ refCode }: HomeProps) {
       <main className="flex-1">
         {/* HERO */}
         <section className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/10 via-cyan-400/10 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/5 via-cyan-400/5 to-transparent pointer-events-none" />
           <div className="max-w-6xl mx-auto px-4 py-12 lg:py-16 grid gap-10 lg:grid-cols-2 items-center relative z-10">
             {/* LEFT */}
             <div className="space-y-7">

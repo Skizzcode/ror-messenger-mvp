@@ -48,9 +48,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const meta = session.metadata || {};
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const meta = session.metadata || {};
 
       // Tip flow
       if (meta.type === 'tip') {
@@ -98,6 +98,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!db.escrows) db.escrows = {} as any;
       if (!db.checkouts) db.checkouts = {} as any;
 
+      const creatorEntry = (db.creators || {})[creator] || null;
+
       db.threads[id] = {
         id,
         creator,
@@ -109,7 +111,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         paid_via: 'stripe',
         ref,
         fan_pubkey: null,      // Fan kann spaeter Wallet binden
-        creator_pubkey: null,
+        creator_pubkey: creatorEntry?.wallet || null,
         payment_intent: session.payment_intent || null,
         checkout_session: session.id,
         variant: meta.variant || 'standard',
@@ -153,7 +155,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await writeDB(db);
 
       // Notify creator via email if verified
-      const creatorEntry = (db.creators || {})[creator];
       if (creatorEntry?.email && creatorEntry?.emailVerified) {
         await sendNewThreadEmail({
           creator,

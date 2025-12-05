@@ -58,7 +58,7 @@ export default function FanDashboard() {
             <img
               src="/logo-ror-glass.svg"
               alt="RoR"
-              className="h-10 w-10 rounded-2xl shadow-lg"
+              className="h-12 w-12 rounded-2xl shadow-lg"
             />
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight">Reply or Refund</div>
