@@ -759,11 +759,15 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value, isPearl }: { label: string; value: number; isPearl?: boolean }) {
   return (
-    <div className="p-3 rounded-xl  text-center bg-white/5">
+    <div
+      className={`p-3 rounded-xl text-center ${
+        isPearl ? 'bg-black/5 text-black border border-black/10' : 'bg-white/5 text-white'
+      }`}
+    >
       <div className="text-2xl font-bold">{value}</div>
-      <div className="text-xs text-white/40">{label}</div>
+      <div className={`${isPearl ? 'text-black/50' : 'text-white/40'} text-xs`}>{label}</div>
     </div>
   );
 }
