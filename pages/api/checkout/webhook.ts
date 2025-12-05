@@ -82,6 +82,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ref,
         fan_pubkey: null,      // Fan kann spaeter Wallet binden
         creator_pubkey: null,
+        payment_intent: session.payment_intent || null,
+        checkout_session: session.id,
       };
 
       db.messages[id] = [];
@@ -113,6 +115,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         threadId: id,
         fan,
         completedAt: now,
+        payment_intent: session.payment_intent || null,
       };
 
       await writeDB(db);

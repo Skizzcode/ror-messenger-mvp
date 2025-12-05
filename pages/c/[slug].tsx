@@ -102,7 +102,7 @@ export default function ChatPage({ handle }: { handle: string }) {
   const fanRemaining = Math.max(0, FAN_PRE_REPLY_LIMIT - fanPreCount);
   const fanLimitReached = role === 'fan' && !creatorHasReplied && fanRemaining <= 0;
 
-  const canSend = isConnected && text.trim().length > 0 && !sending && !fanLimitReached;
+  const canSend = isConnected && text.trim().length > 0 && !sending && !fanLimitReached && !!thread;
 
   // Auto-scroll to bottom
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -158,41 +158,10 @@ export default function ChatPage({ handle }: { handle: string }) {
 
     setSending(true);
     try {
-      // No thread yet → Fan creates new conversation addressed at creatorHandle
+      // No thread yet → require card checkout to start
       if (!thread) {
-        const signed = await signCreateThread(wallet as any, {
-          creator: creatorHandle,
-          fanPubkey: wallet.publicKey!.toBase58(),
-          firstMessage: text,
-          ttlHours: 48,
-        });
-
-        t('create_thread_attempt', { scope: 'chat', props: { creator: creatorHandle } });
-
-        const r = await fetch('/api/create-thread', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            creator: creatorHandle,
-            fan: wallet.publicKey!.toBase58(),
-            amount: 20,
-            ttlHours: 48,
-            firstMessage: text,
-            fanPubkey: wallet.publicKey!.toBase58(),
-            creatorPubkey: null,
-            ref,
-            sigBase58: signed.sigBase58,
-            msg: signed.msg,
-            pubkeyBase58: signed.pubkeyBase58,
-          }),
-        });
-        const j = await r.json();
-        if (!r.ok) {
-          t('create_thread_failed', { scope: 'chat', props: { creator: creatorHandle, error: j?.error || 'unknown' } });
-          throw new Error(j?.error || 'Failed to create thread');
-        }
-        t('create_thread_success', { scope: 'chat', props: { creator: creatorHandle, threadId: j.threadId } });
-        if (typeof window !== 'undefined') window.location.href = `/c/${j.threadId}`;
+        setToast('Start with card checkout to open this chat.');
+        setTimeout(() => setToast(null), 1800);
         return;
       }
 
@@ -347,7 +316,10 @@ export default function ChatPage({ handle }: { handle: string }) {
 
       {/* MAIN */}
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-6 flex flex-col gap-3">
-        <div className="rounded-3xl bg-white/[0.03] border border-white/[0.04] backdrop-blur-xl flex flex-col gap-3 p-4 min-h-[60vh] shadow-[0_12px_60px_rgba(0,0,0,0.25)]">
+        <div
+          className="rounded-3xl bg-white/[0.03] border border-white/[0.04] backdrop-blur-xl flex flex-col gap-3 p-4 min-h-[60vh] shadow-[0_12px_60px_rgba(0,0,0,0.25)]"
+          style={{ filter: noir ? 'grayscale(1) contrast(1.05)' : 'none', transition: 'filter 200ms ease' }}
+        >
           {/* Bind (Stripe fan with no wallet binding yet) */}
           {mounted && thread?.paid_via === 'stripe' && !thread?.fan_pubkey && role === 'fan' && (
             <div className="p-3 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 text-sm flex items-center justify-between gap-3">
@@ -427,8 +399,8 @@ export default function ChatPage({ handle }: { handle: string }) {
 
           {/* INPUT */}
           <div className="space-y-2">
-            {/* Pay with card – only for fan without wallet */}
-            {!isConnected && role === 'fan' && (
+            {/* Pay with card – always available to start a new chat */}
+            {role === 'fan' && !thread && (
               <div className="flex gap-2">
                 <button
                   onClick={async () => {
@@ -437,14 +409,14 @@ export default function ChatPage({ handle }: { handle: string }) {
                       return;
                     }
                     try {
-                    t('pay_with_card_click', { scope: 'chat', props: { creator: creatorHandle } });
+                      t('pay_with_card_click', { scope: 'chat', props: { creator: creatorHandle } });
                       const r = await fetch('/api/checkout/create', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           creator: creatorHandle,
-                          amount: 20,
-                          ttlHours: 48,
+                          amount: creatorProfile?.price ?? undefined,
+                          ttlHours: creatorProfile?.replyWindowHours ?? 48,
                           firstMessage: text,
                           ...(ref ? { ref } : {}),
                         }),
@@ -466,14 +438,14 @@ export default function ChatPage({ handle }: { handle: string }) {
                   }}
                   className="bg-white text-black text-sm px-4 py-2 rounded-2xl shadow-sm"
                 >
-                  Pay with card
+                  Pay with card to start
                 </button>
               </div>
             )}
 
             <textarea
               className="w-full bg-black/30 border border-white/5 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-white/15 disabled:opacity-40"
-              placeholder={role === 'creator' ? 'Write your reply…' : 'Write your message…'}
+              placeholder={role === 'creator' ? 'Write your reply…' : thread ? 'Write your message…' : 'Start by paying with card above'}
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
@@ -484,8 +456,14 @@ export default function ChatPage({ handle }: { handle: string }) {
                   if (canSend) send();
                 }
               }}
-              disabled={!isConnected || fanLimitReached}
-              title={fanLimitReached ? 'Pre-reply limit reached. Please wait for the creator to respond.' : undefined}
+              disabled={(!!thread && !isConnected) || fanLimitReached || !thread}
+              title={
+                !thread
+                  ? 'Pay with card to start the chat.'
+                  : fanLimitReached
+                  ? 'Pre-reply limit reached. Please wait for the creator to respond.'
+                  : undefined
+              }
               onFocus={() => setShowLimitHint(false)}
             />
             <div className="flex items-center gap-2 justify-between">
@@ -501,6 +479,8 @@ export default function ChatPage({ handle }: { handle: string }) {
                   ? 'Sending…'
                   : role === 'creator'
                   ? 'Send reply'
+                  : !thread
+                  ? 'Locked until paid'
                   : fanLimitReached && !creatorHasReplied
                   ? 'Limit reached'
                   : 'Send & lock'}
