@@ -167,7 +167,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   }
 
   async function startSession() {
-    // 1x kurz signieren → Cookie holen
+    // 1x kurz signieren -> Cookie holen
     const hdrs = await signAuthHeaders(wallet as any);
     if (!hdrs) {
       alert('Connect a wallet that supports message signing.');
@@ -384,7 +384,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                     Session active
                   </span>
                   <span className="px-2 py-1 rounded-full bg-white/5 text-white/70 border border-white/10 text-[11px]">
-                    {replyWindowHours}h reply → auto refund
+                    {replyWindowHours}h reply -> auto refund
                   </span>
                   <span className="px-2 py-1 rounded-full bg-white/5 text-white/70 border border-white/10 text-[11px]">
                     {email ? 'Email on file' : 'Add email for ops'}
@@ -416,9 +416,9 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
               <div className="grid grid-cols-4 gap-3">
                 <div className={`p-3 rounded-xl col-span-4 md:col-span-2 ${surface}`}>
                   <div className={`text-xs ${isPearl ? 'text-black/50' : 'text-white/40'}`}>Earnings (MTD)</div>
-                  <div className="text-2xl font-bold">€{(stats?.revenue?.mtd ?? 0).toFixed(2)}</div>
+                  <div className="text-2xl font-bold">EUR {(stats?.revenue?.mtd ?? 0).toFixed(2)}</div>
                   <div className={`text-xs mt-1 ${isPearl ? 'text-black/50' : 'text-white/40'}`}>
-                    All-time: €{(stats?.revenue?.allTime ?? 0).toFixed(2)}
+                    All-time: EUR {(stats?.revenue?.allTime ?? 0).toFixed(2)}
                   </div>
                 </div>
                 <Stat label="Open" value={totals.open} isPearl={isPearl} />
@@ -441,9 +441,9 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <div className="font-semibold">{tItem.id.slice(0, 8)}…</div>
+                        <div className="font-semibold">{tItem.id.slice(0, 8)}...</div>
                         <span className={`${isPearl ? 'text-[10px] px-2 py-0.5 rounded-full bg-black/5 border border-black/10' : 'text-[10px] px-2 py-0.5 rounded-full bg-white/10'}`}>
-                          {`€${Number(tItem.amount || 0).toFixed(2)}`}
+                          {`EUR ${Number(tItem.amount || 0).toFixed(2)}`}
                         </span>
                         <span
                           className={
@@ -461,8 +461,8 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                       <div className={`text-xs ${isPearl ? 'text-black/60' : 'text-white/40'} space-y-1`}>
                         <div>
                           {tItem.messagesCount} msgs
-                          {tItem.status === 'open' && <> · ⏳ {formatRemaining(tItem.remainingMs)} left</>}
-                          {tItem.fanPubkey ? <> · fan: {tItem.fanPubkey.slice(0, 6)}…</> : null}
+                          {tItem.status === 'open' && <> - {formatRemaining(tItem.remainingMs)} left</>}
+                          {tItem.fanPubkey ? <> - fan: {tItem.fanPubkey.slice(0, 6)}...</> : null}
                         </div>
                         {tItem.lastMessageBody && (
                           <div className={`${isPearl ? 'text-black/70' : 'text-white/65'} text-[11px] line-clamp-1`}>
@@ -486,7 +486,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
             </section>
 
             {/* RIGHT */}
-            <aside className="space-y-6">
+                                    <aside className="space-y-6">
               {/* Profile & settings */}
               <div className={`${surface} p-4 space-y-4 rounded-2xl`}>
                 <div className="font-semibold text-lg">Profile</div>
@@ -516,11 +516,7 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                 />
                 {savingAvatar && <div className={`text-[11px] ${hintTone}`}>Uploading...</div>}
                 {avatarDataUrl ? (
-                  <img
-                    src={avatarDataUrl}
-                    alt="avatar"
-                    className="h-12 w-12 rounded-full  object-cover"
-                  />
+                  <img src={avatarDataUrl} alt="avatar" className="h-12 w-12 rounded-full object-cover" />
                 ) : (
                   <div className={`text-[11px] ${hintTone}`}>No avatar yet. Upload a small image.</div>
                 )}
@@ -650,24 +646,27 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                 >
                   <div className={`text-xs ${hintTone}`}>Creators referred</div>
                   <div className="text-xl font-semibold">
-                    {refStatsLoading ? '…' : refStats?.creatorsCount ?? 0}
+                    {refStatsLoading ? '...' : refStats?.creatorsCount ?? 0}
                   </div>
-                  <div className="text-xs text-white/50 mt-1">
-                    Earned (answered): €{refStatsLoading ? '…' : (refStats?.totals?.revenueAnswered ?? 0).toFixed(2)}
+                  <div className={`text-xs mt-1 ${hintTone}`}>
+                    Earned (answered): EUR {refStatsLoading ? '...' : (refStats?.totals?.revenueAnswered ?? 0).toFixed(2)}
                   </div>
                 </div>
-                <Link href="/creator/join" className="text-[12px] text-emerald-200 underline">
+                <Link
+                  href="/creator/join"
+                  className={`text-[12px] underline ${isPearl ? 'text-emerald-600' : 'text-emerald-200'}`}
+                >
                   How referrals work
                 </Link>
               </div>
 
               {/* referral */}
-              <div className="card p-4 space-y-3 relative">
+              <div className={`${surface} p-4 space-y-3 relative rounded-2xl`}>
                 <div className="font-semibold">Invite another creator</div>
-                <p className="text-sm text-white/45">
+                <p className={`text-sm ${hintTone}`}>
                   Share this link. Other creators will start onboarding with your referral code.
                 </p>
-                <div className="input break-all">{refLink || 'Loading…'}</div>
+                <div className={`input break-all ${inputTone}`}>{refLink || 'Loading...'}</div>
                 <button
                   className="btn w-full"
                   onClick={() => {
@@ -682,57 +681,71 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                   Copy link
                 </button>
                 {copied && (
-                  <div className="absolute -top-2 right-3 text-[11px] px-2 py-1 rounded-md bg-white text-black shadow">
+                  <div
+                    className={`absolute -top-2 right-3 text-[11px] px-2 py-1 rounded-md shadow ${
+                      isPearl ? 'bg-black text-white' : 'bg-white text-black'
+                    }`}
+                  >
                     Copied
                   </div>
                 )}
               </div>
 
               {/* Share kit */}
-                <div className="card p-4 space-y-3">
-                  <div className="font-semibold">Share your chat</div>
-                  <div className="text-sm text-white/60">Copy your chat link or use the asset for socials.</div>
-                  <div className="input break-all">{chatLink}</div>
-                  <button
-                    className="btn w-full"
-                    onClick={() => {
-                      navigator.clipboard.writeText(chatLink);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1600);
-                    }}
-                  >
-                    Copy chat link
-                  </button>
-                  <Link href="/logo-ror-glass.svg" className="text-[12px] text-emerald-200 underline">
-                    Download share asset
-                  </Link>
-                  {offers && offers.length > 0 && (
-                    <div className="pt-2 space-y-2">
-                      <div className="text-sm font-semibold">Offer invite links</div>
-                      {offers.map((o, idx) => {
-                        const href = `${chatLink}?offer=${encodeURIComponent(o.id || idx)}`;
-                        return (
-                          <div key={o.id || idx} className="text-[12px] text-white/70 space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span>{o.title || 'Offer'} · €{Number(o.price || 0).toFixed(2)}</span>
-                              <button
-                                className="px-2 py-1 rounded-lg bg-white/10 text-[11px]"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(href);
-                                  setCopied(true);
-                                  setTimeout(() => setCopied(false), 1600);
-                                }}
-                              >
-                                Copy
-                              </button>
-                            </div>
-                            <div className="break-all text-white/50">{href}</div>
+              <div className={`${surface} p-4 space-y-3 rounded-2xl`}>
+                <div className="font-semibold">Share your chat</div>
+                <div className={`text-sm ${hintTone}`}>Copy your chat link or use the asset for socials.</div>
+                <div className={`input break-all ${inputTone}`}>{chatLink}</div>
+                <button
+                  className="btn w-full"
+                  onClick={() => {
+                    navigator.clipboard.writeText(chatLink);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1600);
+                  }}
+                >
+                  Copy chat link
+                </button>
+                <Link
+                  href="/logo-ror-glass.svg"
+                  className={`text-[12px] underline ${isPearl ? 'text-emerald-600' : 'text-emerald-200'}`}
+                >
+                  Download share asset
+                </Link>
+                {offers && offers.length > 0 && (
+                  <div className="pt-2 space-y-2">
+                    <div className="text-sm font-semibold">Offer invite links</div>
+                    {offers.map((o, idx) => {
+                      const href = `${chatLink}?offer=${encodeURIComponent(o.id || idx)}`;
+                      return (
+                        <div
+                          key={o.id || idx}
+                          className={`text-[12px] space-y-1 ${isPearl ? 'text-black/70' : 'text-white/70'}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>
+                              {o.title || 'Offer'} - EUR {Number(o.price || 0).toFixed(2)}
+                            </span>
+                            <button
+                              className={`px-2 py-1 rounded-lg text-[11px] ${
+                                isPearl ? 'bg-black text-white' : 'bg-white/10 text-white'
+                              }`}
+                              onClick={() => {
+                                navigator.clipboard.writeText(href);
+                                setCopied(true);
+                                setTimeout(() => setCopied(false), 1600);
+                              }}
+                            >
+                              Copy
+                            </button>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                          <div className={`break-all ${hintTone}`}>{href}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </aside>
           </main>
         </>
@@ -833,7 +846,7 @@ function VerificationForm({ handle, onVerified }: { handle: string; onVerified: 
         onChange={(e) => setCode(e.target.value)}
       />
       <button className="btn w-full" onClick={submit} disabled={status === 'submitting'}>
-        {status === 'submitting' ? 'Verifying…' : 'Verify email'}
+        {status === 'submitting' ? 'Verifying...' : 'Verify email'}
       </button>
       <button
         className="btn w-full"
@@ -862,7 +875,7 @@ function VerificationForm({ handle, onVerified }: { handle: string; onVerified: 
         }}
         disabled={resendStatus === 'sending'}
       >
-        {resendStatus === 'sending' ? 'Sending…' : resendStatus === 'sent' ? 'Sent' : 'Resend code'}
+        {resendStatus === 'sending' ? 'Sending...' : resendStatus === 'sent' ? 'Sent' : 'Resend code'}
       </button>
       <div className="text-[11px] text-white/50">We require email verification to protect creators and fans.</div>
     </div>
@@ -872,5 +885,20 @@ function VerificationForm({ handle, onVerified }: { handle: string; onVerified: 
 export async function getServerSideProps(ctx: any) {
   return { props: { handle: ctx.params.handle } };
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
