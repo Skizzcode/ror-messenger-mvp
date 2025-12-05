@@ -1,16 +1,19 @@
-<!-- public/logo-ror-glass.svg -->
-<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF" stop-opacity="0.6"></stop>
-      <stop offset="1" stop-color="#5F99FF" stop-opacity="0.1"></stop>
-    </linearGradient>
-  </defs>
-  <circle cx="60" cy="60" r="50" fill="url(#g)" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"></circle>
-  <circle cx="60" cy="60" r="38" fill="rgba(5,7,10,0.65)" stroke="rgba(255,255,255,0.04)" stroke-width="1"></circle>
-  <!-- Chat + Shield -->
-  <path d="M47 52C47 49.791 48.791 48 51 48H68C70.209 48 72 49.791 72 52V60.5C72 62.709 70.209 64.5 68 64.5H57.5L52 70V64.5H51C48.791 64.5 47 62.709 47 60.5V52Z" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
-  <path d="M69 56.5L65.5 60L63 57.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
-  <!-- R -->
-  <text x="60" y="87" text-anchor="middle" fill="white" font-size="12" font-family="system-ui, -apple-system, BlinkMacSystemFont" opacity="0.6" letter-spacing="0.12em">ROR</text>
+<svg width="800" height="300" viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Hintergrund -->
+  <rect x="0" y="0" width="800" height="300" fill="black"></rect>
+
+  <!-- Raute (rotierter Rahmen) -->
+  <rect x="140" y="90" width="120" height="120" fill="none" stroke="white" stroke-width="10" transform="rotate(45 200 150)"></rect>
+
+  <!-- Dünnes "ROR" im Inneren der Raute -->
+  <text x="200" y="150" fill="white" font-family="Poppins, Montserrat, 'Helvetica Neue', Arial, sans-serif" font-size="40" font-weight="300" letter-spacing="6" text-anchor="middle" dominant-baseline="middle">
+    ROR
+  </text>
+
+  <!-- Slogan "Reply Or Refund" rechts daneben -->
+  <text x="320" y="150" fill="white" font-family="Poppins, Montserrat, 'Helvetica Neue', Arial, sans-serif" font-size="38" font-weight="500" letter-spacing="6" dominant-baseline="middle">
+    Reply Or Refund
+  </text>
+
 </svg>

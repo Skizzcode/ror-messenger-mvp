@@ -4,7 +4,7 @@
 @tailwind utilities;
 
 :root {
-  --bg: radial-gradient(circle at 15% 20%, rgba(178, 243, 108, 0.12), transparent 26%),
+  --bg: url('/backround.png'), radial-gradient(circle at 15% 20%, rgba(178, 243, 108, 0.12), transparent 26%),
         radial-gradient(circle at 85% 15%, rgba(0, 255, 200, 0.09), transparent 24%),
         linear-gradient(135deg, #05060a, #070a13 45%, #0e1220);
   --card: rgba(255, 255, 255, 0.05);
@@ -23,6 +23,10 @@ body {
   padding: 0;
   margin: 0;
   background: var(--bg);
+  background-size: cover, cover;
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed;
+  background-position: center;
   color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }

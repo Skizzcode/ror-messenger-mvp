@@ -29,6 +29,10 @@ export default function ChatPage({ handle }: { handle: string }) {
   const [showLimitHint, setShowLimitHint] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [noir, setNoir] = useState(false);
+  const [payVariant, setPayVariant] = useState<'standard' | 'fast'>('standard');
+  const [discountPercent, setDiscountPercent] = useState<number | null>(null);
+  const [tipAmount, setTipAmount] = useState<number>(5);
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
 
   // slug used when creating a new thread (chat launched via /c/{creatorHandle})
   const creatorHandle = handle;
@@ -40,6 +44,8 @@ export default function ChatPage({ handle }: { handle: string }) {
       const u = new URL(window.location.href);
       const r = u.searchParams.get('ref');
       if (r) setRef(r);
+      const d = u.searchParams.get('discount');
+      if (d && !Number.isNaN(Number(d))) setDiscountPercent(Number(d));
     }
   }, []);
 
@@ -143,6 +149,13 @@ export default function ChatPage({ handle }: { handle: string }) {
     return `${h}h ${m}m`;
   }, [thread, mounted, data]);
 
+  const offers = creatorProfile?.offers || [];
+  const standardPrice = creatorProfile?.price ?? 20;
+  const standardWindow = creatorProfile?.replyWindowHours ?? 48;
+  const fastPrice = creatorProfile?.fastPrice ?? Math.round(standardPrice * 1.5 * 100) / 100;
+  const fastWindow = creatorProfile?.fastReplyWindowHours ?? Math.max(12, Math.round(standardWindow / 2));
+  const selectedOffer = offers.find((o: any) => o.id === selectedOfferId) || null;
+
   // Send message or create thread
   async function send() {
     if (!text.trim() || sending) return;
@@ -216,7 +229,7 @@ export default function ChatPage({ handle }: { handle: string }) {
 
   return (
     <div className="min-h-screen bg-[#0A0B0E] text-white flex flex-col">
-      {/* === GLOBAL HEADER (wie Index): Logo + Wallet Connect === */}
+      {/* HEADER */}
       <header className="sticky top-0 z-30 bg-black/20 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2 group">
@@ -235,24 +248,7 @@ export default function ChatPage({ handle }: { handle: string }) {
         </div>
       </header>
 
-      {/* TRUST BAR / CTA */}
-      <section className="bg-gradient-to-r from-emerald-400/20 via-white/10 to-cyan-400/20 border-b border-white/5">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex flex-wrap items-center gap-2 justify-between text-[11px] text-white/70">
-          <div className="flex flex-wrap gap-2">
-            <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Refund SLA: no reply → refund</span>
-            <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Escrowed chats</span>
-            <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Card + wallet</span>
-          </div>
-          <button
-            className="px-3 py-1 rounded-full bg-white/10 border border-white/10 hover:bg-white/15"
-            onClick={() => setNoir((v) => !v)}
-          >
-            {noir ? 'Show color' : 'Noir view'}
-          </button>
-        </div>
-      </section>
-
-      {/* === CHAT HEADER (Status + Limit-Badge) === */}
+      {/* CHAT HEADER */}
       <header className="z-20 bg-black/10 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -360,6 +356,27 @@ export default function ChatPage({ handle }: { handle: string }) {
             </div>
           )}
 
+          {/* STATUS STRIP */}
+          <div className="flex items-center justify-between text-[11px] text-white/60">
+            {!thread ? (
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">✓ waiting for payment</span>
+                <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Send unlocks after checkout</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/40 text-emerald-50">✓✓ paid & escrowed</span>
+                {timeLeft && <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Time left: {timeLeft}</span>}
+              </div>
+            )}
+            <button
+              className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-[10px]"
+              onClick={() => setNoir((v) => !v)}
+            >
+              {noir ? 'Show color' : 'Noir view'}
+            </button>
+          </div>
+
           {/* MESSAGES */}
           <div
             ref={listRef}
@@ -370,7 +387,7 @@ export default function ChatPage({ handle }: { handle: string }) {
               <div
                 key={m.id}
                 className={
-                  'max-w-[78%] px-4 py-2 rounded-2xl shadow-sm ' +
+                  'max-w-[78%] px-4 py-2 rounded-2xl shadow-sm relative ' +
                   (m.from === 'fan'
                     ? 'bg-white text-black rounded-bl-md'
                     : 'bg-[#111827]/90 border border-white/5 rounded-br-md ml-auto')
@@ -379,7 +396,10 @@ export default function ChatPage({ handle }: { handle: string }) {
                 <div className="text-[10px] uppercase tracking-wide opacity-40 mb-1">
                   {m.from === 'fan' ? 'Fan' : 'Creator'}
                 </div>
-                <div className="text-sm leading-relaxed">{m.body}</div>
+                <div className="text-sm leading-relaxed pr-8">{m.body}</div>
+                <div className="absolute bottom-2 right-3 text-[10px] flex items-center gap-1 opacity-60">
+                  <span>{formatMsgStatus(m, thread)}</span>
+                </div>
               </div>
             ))}
             {!messages.length && (
@@ -397,55 +417,152 @@ export default function ChatPage({ handle }: { handle: string }) {
             </div>
           )}
 
+          {/* Follow-up & Tip CTAs */}
+          {thread && thread.status === 'answered' && (
+            <div className="grid gap-2 md:grid-cols-2">
+              <button
+                className="px-4 py-2 rounded-2xl border border-white/15 bg-white/5 text-sm"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    const next = `/c/${creatorHandle}?discount=20`;
+                    window.location.href = next;
+                  }
+                }}
+              >
+                Start follow-up (-20%)
+              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={tipAmount}
+                  onChange={(e) => setTipAmount(Number(e.target.value) || 1)}
+                  placeholder="Tip amount"
+                />
+                <button
+                  className="px-3 py-2 rounded-2xl bg-white text-black text-sm"
+                  onClick={async () => {
+                    try {
+                      const r = await fetch('/api/checkout/tip', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ threadId: thread.id, creator: creatorHandle, amount: tipAmount }),
+                      });
+                      const j = await r.json();
+                      if (j?.url) {
+                        setToast('Redirecting to tip checkout…');
+                        setTimeout(() => setToast(null), 1500);
+                        window.location.href = j.url;
+                      }
+                    } catch (e) {
+                      setToast('Tip failed. Try again.');
+                      setTimeout(() => setToast(null), 2000);
+                    }
+                  }}
+                >
+                  Tip creator
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* INPUT */}
           <div className="space-y-2">
             {/* Pay with card – always available to start a new chat */}
             {role === 'fan' && !thread && (
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    if (!text.trim()) {
-                      alert('Type your first message first.');
-                      return;
+              <div className="space-y-2">
+                <div className="flex gap-2 text-xs text-white/60 items-center flex-wrap">
+                  <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Standard: €{standardPrice.toFixed(2)} · {standardWindow}h</span>
+                  <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Fast: €{fastPrice.toFixed(2)} · {fastWindow}h</span>
+                  {offers.map((o: any) => (
+                    <span key={o.id} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">
+                      {o.title}: €{Number(o.price).toFixed(2)} · {o.replyWindowHours || standardWindow}h
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => setPayVariant('standard')}
+                    className={
+                      'px-4 py-2 rounded-2xl text-sm border ' +
+                      (payVariant === 'standard' ? 'bg-white text-black' : 'border-white/20')
                     }
-                    try {
-                      t('pay_with_card_click', { scope: 'chat', props: { creator: creatorHandle } });
-                      const r = await fetch('/api/checkout/create', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          creator: creatorHandle,
-                          amount: creatorProfile?.price ?? undefined,
-                          ttlHours: creatorProfile?.replyWindowHours ?? 48,
-                          firstMessage: text,
-                          ...(ref ? { ref } : {}),
-                        }),
-                      });
-                      const j = await r.json();
-                      if (j?.url) {
-                        setToast('Redirecting to secure checkout…');
-                        setTimeout(() => setToast(null), 1500);
-                        window.location.href = j.url;
-                      } else {
-                        setToast('Redirecting to secure checkout…');
-                        setTimeout(() => setToast(null), 1500);
+                  >
+                    Standard
+                  </button>
+                  <button
+                    onClick={() => setPayVariant('fast')}
+                    className={
+                      'px-4 py-2 rounded-2xl text-sm border ' +
+                      (payVariant === 'fast' ? 'bg-white text-black' : 'border-white/20')
+                    }
+                  >
+                    Fast reply
+                  </button>
+                  {offers.map((o: any) => (
+                    <button
+                      key={o.id}
+                      onClick={() => {
+                        setSelectedOfferId(o.id);
+                        setPayVariant('standard');
+                      }}
+                      className={
+                        'px-4 py-2 rounded-2xl text-sm border ' +
+                        (selectedOfferId === o.id ? 'bg-white text-black' : 'border-white/20')
                       }
-                    } catch (e) {
-                      console.error(e);
-                      setToast('Checkout failed. Try again.');
-                      setTimeout(() => setToast(null), 2000);
-                    }
-                  }}
-                  className="bg-white text-black text-sm px-4 py-2 rounded-2xl shadow-sm"
-                >
-                  Pay with card to start
-                </button>
+                    >
+                      {o.title || 'Custom'}
+                    </button>
+                  ))}
+                  <button
+                    onClick={async () => {
+                      if (!text.trim()) {
+                        alert('Type your first message first.');
+                        return;
+                      }
+                      try {
+                        t('pay_with_card_click', { scope: 'chat', props: { creator: creatorHandle, variant: payVariant } });
+                        const r = await fetch('/api/checkout/create', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            creator: creatorHandle,
+                            amount: selectedOffer ? selectedOffer.price : payVariant === 'fast' ? fastPrice : standardPrice,
+                            ttlHours: selectedOffer ? selectedOffer.replyWindowHours || standardWindow : payVariant === 'fast' ? fastWindow : standardWindow,
+                            firstMessage: text,
+                            variant: selectedOffer ? `offer:${selectedOffer.id}` : payVariant,
+                            ...(selectedOffer ? { offerId: selectedOffer.id, offerTitle: selectedOffer.title || '' } : {}),
+                            ...(discountPercent ? { discountPercent } : {}),
+                            ...(ref ? { ref } : {}),
+                          }),
+                        });
+                        const j = await r.json();
+                        if (j?.url) {
+                          setToast('Redirecting to secure checkout…');
+                          setTimeout(() => setToast(null), 1500);
+                          window.location.href = j.url;
+                        } else {
+                          setToast('Redirecting to secure checkout…');
+                          setTimeout(() => setToast(null), 1500);
+                        }
+                      } catch (e) {
+                        console.error(e);
+                        setToast('Checkout failed. Try again.');
+                        setTimeout(() => setToast(null), 2000);
+                      }
+                    }}
+                    className="bg-white text-black text-sm px-4 py-2 rounded-2xl shadow-sm"
+                  >
+                    Pay with card to start
+                  </button>
+                </div>
               </div>
             )}
 
             <textarea
               className="w-full bg-black/30 border border-white/5 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-white/15 disabled:opacity-40"
-              placeholder={role === 'creator' ? 'Write your reply…' : thread ? 'Write your message…' : 'Start by paying with card above'}
+              placeholder={role === 'creator' ? 'Write your reply…' : thread ? 'Write your message…' : 'Type your message, then pay to send'}
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
@@ -456,11 +573,9 @@ export default function ChatPage({ handle }: { handle: string }) {
                   if (canSend) send();
                 }
               }}
-              disabled={(!!thread && !isConnected) || fanLimitReached || !thread}
+              disabled={(!!thread && !isConnected) || fanLimitReached}
               title={
-                !thread
-                  ? 'Pay with card to start the chat.'
-                  : fanLimitReached
+                fanLimitReached
                   ? 'Pre-reply limit reached. Please wait for the creator to respond.'
                   : undefined
               }
@@ -516,6 +631,14 @@ function formatMs(ms: number) {
   const m = Math.floor((ms % 3600000) / 60000);
   if (h >= 1) return `${h}h ${m}m`;
   return `${m}m`;
+}
+
+function formatMsgStatus(m: any, thread: any) {
+  if (!thread) return '✓ pending';
+  if (thread.status === 'refunded') return '✓ refunded';
+  if (thread.status === 'answered') return '✓✓ delivered';
+  if (thread.status === 'open') return '✓✓ escrowed';
+  return '✓ sent';
 }
 
 export async function getServerSideProps(ctx: any) {

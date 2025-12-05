@@ -52,6 +52,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const session = event.data.object as Stripe.Checkout.Session;
       const meta = session.metadata || {};
 
+      // Tip flow
+      if (meta.type === 'tip') {
+        const threadId = (meta.threadId as string) || '';
+        const creator = (meta.creator as string) || '';
+        const amount = (session.amount_total || 0) / 100;
+        if (threadId) {
+          const db = await readDB();
+          (db as any).tips = (db as any).tips || {};
+          if (!Array.isArray((db as any).tips[threadId])) (db as any).tips[threadId] = [];
+          (db as any).tips[threadId].push({
+            amount,
+            sessionId: session.id,
+            payment_intent: session.payment_intent || null,
+            ts: Date.now(),
+          });
+          if ((db as any).tipsPending) delete (db as any).tipsPending[session.id];
+          await writeDB(db);
+          await track({
+            event: 'tip_completed',
+            scope: 'system',
+            handle: creator,
+            threadId,
+            meta: { paid_via: 'stripe', sessionId: (session.id as string) || null },
+          });
+        }
+        return res.status(200).json({ received: true });
+      }
+
       // Erwartete Metadaten (vom Checkout erstellt)
       const creator = (meta.creator as string) || 'unknown';
       const fan = (meta.fanHint as string) || (meta.fan_hint as string) || 'stripe_user';
@@ -84,6 +112,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         creator_pubkey: null,
         payment_intent: session.payment_intent || null,
         checkout_session: session.id,
+        variant: meta.variant || 'standard',
+        discountPercent: meta.discountPercent || '',
+        offerId: meta.offerId || '',
+        offerTitle: meta.offerTitle || '',
       };
 
       db.messages[id] = [];

@@ -21,9 +21,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const {
     creator,           // handle (string) -> Pflicht
     firstMessage,      // erste Fan-Nachricht -> Pflicht
-    amount,            // optional (wird von Creator-Settings ueberschrieben, wenn vorhanden)
-    ttlHours,          // optional (wird ueberschrieben, wenn Creator-Setting vorhanden)
+    amount,            // optional override
+    ttlHours,          // optional override
     ref,               // optional referral-code
+    variant,           // 'standard' | 'fast' | offer:{id}
+    discountPercent,   // optional discount in %
+    offerId,
+    offerTitle,
   } = req.body || {};
 
   if (!creator || !firstMessage) {
@@ -37,20 +41,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Ref-Self-Check
   const safeRef = ref && c?.refCode === ref ? null : ref || null;
 
-  // 2) Preis & Reply-Fenster priorisieren: Creator-Settings > Body > Defaults
-  const priceNumber =
+  const basePrice =
     typeof c?.price === 'number' && c.price > 0
       ? c.price
       : typeof amount === 'number' && amount > 0
       ? amount
       : 20;
 
-  const replyWindowHours =
+  const baseWindow =
     typeof c?.replyWindowHours === 'number' && c.replyWindowHours > 0
       ? c.replyWindowHours
       : typeof ttlHours === 'number' && ttlHours > 0
       ? ttlHours
       : 48;
+
+  const fastPrice = typeof c?.fastPrice === 'number' && c.fastPrice > 0 ? c.fastPrice : basePrice * 1.5;
+  const fastWindow =
+    typeof c?.fastReplyWindowHours === 'number' && c.fastReplyWindowHours > 0
+      ? c.fastReplyWindowHours
+      : Math.max(12, Math.round(baseWindow / 2));
+
+  const useFast = variant === 'fast';
+  let priceNumber = useFast ? fastPrice : basePrice;
+  let replyWindowHours = useFast ? fastWindow : baseWindow;
+
+  if (discountPercent && Number(discountPercent) > 0 && Number(discountPercent) < 90) {
+    priceNumber = priceNumber * (1 - Number(discountPercent) / 100);
+  }
 
   // 3) Stripe-Session bauen
   const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -91,6 +108,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ttlHours: String(replyWindowHours),
         ref: safeRef || '',
         source: 'ror',
+        variant: offerId ? `offer:${offerId}` : useFast ? 'fast' : 'standard',
+        offerId: offerId || '',
+        offerTitle: offerTitle || '',
+        discountPercent: discountPercent ? String(discountPercent) : '',
       },
     });
 

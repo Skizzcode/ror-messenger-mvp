@@ -82,6 +82,9 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   const [email, setEmail] = useState<string>('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [toast, setToast] = useState<string | null>(null);
+  const [fastPrice, setFastPrice] = useState<number | null>(null);
+  const [fastReplyWindow, setFastReplyWindow] = useState<number | null>(null);
+  const [offers, setOffers] = useState<any[]>([]);
   const [refStats, setRefStats] = useState<any>(null);
   const [refStatsLoading, setRefStatsLoading] = useState(false);
 
@@ -92,6 +95,9 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
       setDisplayName(settings.displayName ?? '');
       setAvatarDataUrl(settings.avatarDataUrl ?? '');
       setEmail(settings.email ?? '');
+      setFastPrice(settings.fastPrice ?? null);
+      setFastReplyWindow(settings.fastReplyWindowHours ?? null);
+      setOffers(settings.offers || []);
       t('creator_dash_settings_loaded', { scope: 'creator_dashboard', props: { handle } });
     }
   }, [authorized, settings, handle]);
@@ -189,7 +195,17 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   async function saveSettings(extra?: Record<string, any>) {
     if (!authorized) { alert('Not authorized.'); return; }
     setSaveStatus('saving');
-    const body = { handle, price, replyWindowHours, displayName, email, ...(extra || {}) };
+    const body = {
+      handle,
+      price,
+      replyWindowHours,
+      displayName,
+      email,
+      ...(fastPrice ? { fastPrice } : {}),
+      ...(fastReplyWindow ? { fastReplyWindowHours: fastReplyWindow } : {}),
+      offers,
+      ...(extra || {}),
+    };
     t('creator_settings_save_attempt', { scope: 'creator_dashboard', props: { handle } });
     const r = await fetch('/api/creator-settings', {
       method: 'POST',
@@ -508,6 +524,81 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
                   value={replyWindowHours}
                   onChange={(e) => setReplyWindowHours(Number(e.target.value))}
                 />
+
+                <label className="text-sm text-white/50">Fast Lane price (optional)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={fastPrice ?? ''}
+                  onChange={(e) => setFastPrice(e.target.value === '' ? null : Number(e.target.value))}
+                  placeholder="e.g. 1.5x your normal price"
+                />
+
+                <label className="text-sm text-white/50">Fast Lane reply window (hours, optional)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={fastReplyWindow ?? ''}
+                  onChange={(e) => setFastReplyWindow(e.target.value === '' ? null : Number(e.target.value))}
+                  placeholder="e.g. 12"
+                />
+
+                <div className="h-px bg-white/10" />
+                <div className="font-semibold">Custom offers (up to 2)</div>
+                {[0, 1].map((i) => {
+                  const o = offers[i] || { title: '', price: '', replyWindowHours: '', description: '' };
+                  return (
+                    <div key={i} className="space-y-2 p-2 rounded-xl bg-white/5 border border-white/10">
+                      <label className="text-sm text-white/60">Title</label>
+                      <input
+                        className="input"
+                        value={o.title}
+                        placeholder="e.g. Deep dive"
+                        onChange={(e) => {
+                          const next = [...offers];
+                          next[i] = { ...o, title: e.target.value };
+                          setOffers(next);
+                        }}
+                      />
+                      <label className="text-sm text-white/60">Price (EUR)</label>
+                      <input
+                        className="input"
+                        type="number"
+                        min={1}
+                        value={o.price}
+                        onChange={(e) => {
+                          const next = [...offers];
+                          next[i] = { ...o, price: Number(e.target.value) };
+                          setOffers(next);
+                        }}
+                      />
+                      <label className="text-sm text-white/60">Reply window (hours)</label>
+                      <input
+                        className="input"
+                        type="number"
+                        min={1}
+                        value={o.replyWindowHours}
+                        onChange={(e) => {
+                          const next = [...offers];
+                          next[i] = { ...o, replyWindowHours: Number(e.target.value) };
+                          setOffers(next);
+                        }}
+                      />
+                      <label className="text-sm text-white/60">Description</label>
+                      <textarea
+                        className="w-full bg-black/30 border border-white/5 rounded-xl px-3 py-2 text-sm"
+                        value={o.description}
+                        onChange={(e) => {
+                          const next = [...offers];
+                          next[i] = { ...o, description: e.target.value };
+                          setOffers(next);
+                        }}
+                      />
+                    </div>
+                  );
+                })}
 
                 <button className="btn w-full" onClick={() => saveSettings()}>
                   {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Save'}

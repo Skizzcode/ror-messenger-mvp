@@ -27,6 +27,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     price: number;
     avgReplyMs?: number | null;
     answerRate?: number | null;
+    replyWindowHours?: number | null;
+    fastPrice?: number | null;
+    fastReplyWindowHours?: number | null;
+    offers?: any[] | null;
   } | null = null;
 
   if (thread?.creator) {
@@ -39,6 +43,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         price: typeof ce.price === 'number' ? ce.price : 20,
         avgReplyMs: typeof ce.avgReplyMs === 'number' ? ce.avgReplyMs : null,
         answerRate: typeof ce.answerRate === 'number' ? ce.answerRate : null,
+        replyWindowHours: typeof ce.replyWindowHours === 'number' ? ce.replyWindowHours : null,
+        fastPrice: typeof ce.fastPrice === 'number' ? ce.fastPrice : null,
+        fastReplyWindowHours: typeof ce.fastReplyWindowHours === 'number' ? ce.fastReplyWindowHours : null,
+        offers: Array.isArray((ce as any).offers) ? (ce as any).offers : [],
       };
     } else {
       // fallback falls creator noch nicht im creators-objekt ist
@@ -49,6 +57,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         price: typeof thread.amount === 'number' ? thread.amount : 20,
         avgReplyMs: null,
         answerRate: null,
+        replyWindowHours: thread.ttlHours || null,
+        fastPrice: null,
+        fastReplyWindowHours: null,
+        offers: [],
       };
     }
   }

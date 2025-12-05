@@ -75,8 +75,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       displayName: creator.displayName || '',
       avatarDataUrl: creator.avatarDataUrl || '',
       price: creator.price ?? 20,
+      fastPrice: creator.fastPrice ?? null,
+      fastReplyWindowHours: creator.fastReplyWindowHours ?? null,
       refCode: creator.refCode || null,
       replyWindowHours: creator.replyWindowHours ?? 48,
+      offers: (creator as any).offers || [],
       email: creator.email || '',
       emailVerified: !!creator.emailVerified,
       statusText: creator.statusText || '',
@@ -98,6 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       banned,
       bio,
       statusText,
+      offers,
     } = (req.body ?? {}) as {
       price?: number | string;
       replyWindowHours?: number | string;
@@ -109,6 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       banned?: boolean;
       bio?: string;
       statusText?: string;
+      offers?: any[];
     };
 
     // 🧠 Ein Creator pro Wallet:
@@ -138,6 +143,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (price !== undefined) creator.price = Number(price) || 0;
     if (replyWindowHours !== undefined) creator.replyWindowHours = Number(replyWindowHours) || 48;
+    if ((req.body as any)?.fastPrice !== undefined) {
+      const fp = Number((req.body as any).fastPrice);
+      if (Number.isFinite(fp) && fp > 0) creator.fastPrice = fp;
+    }
+    if ((req.body as any)?.fastReplyWindowHours !== undefined) {
+      const fr = Number((req.body as any).fastReplyWindowHours);
+      if (Number.isFinite(fr) && fr > 0) creator.fastReplyWindowHours = fr;
+    }
     if (typeof displayName === 'string') creator.displayName = displayName.trim();
 
     if (typeof avatarDataUrl === 'string' && avatarDataUrl.startsWith('data:image/')) {
@@ -160,6 +173,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (typeof bio === 'string') creator.bio = bio.slice(0, 300);
     if (typeof statusText === 'string') creator.statusText = statusText.slice(0, 140);
+
+    // Optional custom offers (max 2)
+    if (Array.isArray(offers)) {
+      const cleanOffers = offers
+        .filter((o) => o && typeof o.title === 'string' && o.title.trim())
+        .slice(0, 2)
+        .map((o) => ({
+          id: o.id || `offer_${uid().slice(0, 6)}`,
+          title: String(o.title).trim().slice(0, 40),
+          price: Number(o.price) > 0 ? Number(o.price) : 0,
+          replyWindowHours: Number(o.replyWindowHours) > 0 ? Number(o.replyWindowHours) : null,
+          description: typeof o.description === 'string' ? o.description.slice(0, 120) : '',
+        }));
+      (creator as any).offers = cleanOffers;
+    }
 
     if (typeof banned === 'boolean') {
       creator.banned = banned;
