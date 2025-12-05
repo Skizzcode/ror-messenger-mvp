@@ -1,4 +1,4 @@
-// pages/c/[slug].tsx
+﻿// pages/c/[slug].tsx
 import useSWR from 'swr';
 import Link from 'next/link';
 import { useState, useRef, useEffect, useMemo } from 'react';
@@ -24,7 +24,7 @@ export default function ChatPage({ handle }: { handle: string }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [lastTx, setLastTx] = useState<string | null>(null);
-  const [forceRole, setForceRole] = useState<'fan' | null>(null); // creator can “test as fan”
+  const [forceRole, setForceRole] = useState<'fan' | null>(null); // creator can test as fan
   const [ref, setRef] = useState<string | null>(null);
   const [showLimitHint, setShowLimitHint] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -85,7 +85,7 @@ export default function ChatPage({ handle }: { handle: string }) {
     return 'fan';
   }, [thread, walletPk]);
 
-  // Only the creator’s wallet may “test as fan” (and only if it’s not also the fan wallet)
+  // Only the creator's wallet may test as fan (and only if it's not also the fan wallet)
   const canActAsFan =
     walletPk &&
     thread?.creator_pubkey &&
@@ -118,7 +118,7 @@ export default function ChatPage({ handle }: { handle: string }) {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages, mounted]);
 
-  // Escrow (client stub) — only for fan role when a thread exists
+  // Escrow (client stub) - only for fan role when a thread exists
   const escrowTried = useRef(false);
   useEffect(() => {
     if (!mounted) return;
@@ -158,6 +158,10 @@ export default function ChatPage({ handle }: { handle: string }) {
   const fastWindow = creatorProfile?.fastReplyWindowHours ?? Math.max(12, Math.round(standardWindow / 2));
   const selectedOffer = offers.find((o: any) => o.id === selectedOfferId) || null;
 
+  const shell = 'bg-gradient-to-br from-[#05070f] via-[#0d1327] to-[#05070f] text-white';
+  const panel = 'bg-white/5 border border-white/10 backdrop-blur-xl shadow-[0_30px_120px_rgba(0,0,0,0.45)]';
+  const pill = 'px-3 py-1 rounded-full text-[11px] border border-white/15 bg-white/10';
+
   // Send message or create thread
   async function send() {
     if (!text.trim() || sending) return;
@@ -173,17 +177,15 @@ export default function ChatPage({ handle }: { handle: string }) {
 
     setSending(true);
     try {
-      // No thread yet → require card checkout to start
       if (!thread) {
         setToast('Start with card checkout to open this chat.');
         setTimeout(() => setToast(null), 1800);
         return;
       }
 
-      // Thread exists → normal message flow
       if (fanLimitReached && role === 'fan' && !creatorHasReplied) {
         alert(
-          `You’ve reached the pre-reply limit (${FAN_PRE_REPLY_LIMIT}/${FAN_PRE_REPLY_LIMIT}). Please wait for the creator’s reply.`
+          `You have reached the pre-reply limit (${FAN_PRE_REPLY_LIMIT}/${FAN_PRE_REPLY_LIMIT}). Please wait for the creator to reply.`
         );
         setSending(false);
         return;
@@ -229,401 +231,471 @@ export default function ChatPage({ handle }: { handle: string }) {
     }
   }
 
+  const statusLabel = !thread
+    ? 'Awaiting checkout'
+    : thread.status === 'answered'
+    ? 'Answered · escrow released'
+    : thread.status === 'refunded'
+    ? 'Refunded'
+    : 'Open · escrowed';
+
   return (
-    <div className="min-h-screen bg-[#0A0B0E] text-white flex flex-col">
-      {/* HEADER */}
-      <header className="sticky top-0 z-30 bg-black/20 backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <Link href="/" className="flex items-center gap-2 group">
+    <div className={`min-h-screen relative overflow-hidden ${shell}`}>
+      <div className="pointer-events-none absolute -top-20 -right-12 h-80 w-80 bg-emerald-400/25 blur-3xl rounded-full" />
+      <div className="pointer-events-none absolute top-12 -left-12 h-64 w-64 bg-cyan-400/20 blur-3xl rounded-full" />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.07] bg-[radial-gradient(circle_at_18%_22%,#ffffff,transparent_26%),radial-gradient(circle_at_82%_0%,#7cffe0,transparent_20%)]" />
+
+      {/* GLOBAL HEADER */}
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#05070f]/80 backdrop-blur">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <Link href="/" className="flex items-center gap-3 group">
             <img
               src="/logo-ror-glass.svg"
               alt="RoR"
-              className="h-12 w-12 rounded-2xl  shadow-sm"
+              className="h-10 w-10 rounded-2xl object-contain shadow-lg"
             />
-            <span className="font-semibold tracking-tight group-hover:opacity-80 transition">
-              Reply or Refund
-            </span>
+            <div>
+              <div className="font-bold tracking-tight group-hover:opacity-80 transition">Reply or Refund</div>
+              <div className="text-[11px] uppercase tracking-[0.16em] text-white/50">Paid DMs</div>
+            </div>
           </Link>
           <div className="flex items-center gap-2">
-            <WalletMultiButtonDynamic className="!bg-white !text-black !rounded-2xl !h-8 !px-3 !py-0 !text-sm !shadow" />
+            <WalletMultiButtonDynamic className="!bg-white !text-black !rounded-2xl !h-9 !px-3 !py-0 !text-sm !shadow" />
           </div>
         </div>
       </header>
 
-      {/* CHAT HEADER */}
-      <header className="z-20 bg-black/10 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <img
-              src={creatorProfile?.avatarDataUrl || '/logo-ror-glass.svg'}
-              alt="RoR"
-              className="h-8 w-8 rounded-full  shadow-sm object-cover"
-            />
-            <div className="leading-tight">
-              <div className="text-sm font-semibold tracking-tight">
-                {thread ? 'RoR Chat' : `Chat with ${creatorHandle}`}
-              </div>
-              <div className="text-[10px] text-white/40">
-                {thread ? `Time left: ${timeLeft || '—'}` : 'New conversation'}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {thread?.creator_pubkey && (
-              <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-50">
-                Verified creator
-              </span>
-            )}
-            {creatorProfile?.answerRate !== null && creatorProfile?.answerRate !== undefined && (
-              <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 ">
-                Answers {(creatorProfile.answerRate * 100).toFixed(0)}%
-              </span>
-            )}
-            {creatorProfile?.avgReplyMs ? (
-              <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 ">
-                Avg reply {formatMs(creatorProfile.avgReplyMs)}
-              </span>
-            ) : null}
-            {role === 'fan' && !creatorHasReplied && (
-              <span
-                className="text-[10px] px-2 py-1 rounded-xl bg-white/5 "
-                title={`Before the creator's first reply you can send up to ${FAN_PRE_REPLY_LIMIT} messages.`}
-              >
-                Pre-reply cap: {fanPreCount}/{FAN_PRE_REPLY_LIMIT}
-              </span>
-            )}
-            {canActAsFan && (
-              <button
-                onClick={() => {
-                  setForceRole((r) => (r ? null : 'fan'));
-                  t('switch_role_test_as_fan', { scope: 'chat', props: { threadId: thread?.id || null } });
-                }}
-                className="text-[10px] px-2 py-1 rounded-xl bg-white/5  hover:bg-white/10 transition"
-              >
-                {forceRole === 'fan' ? 'Back to creator' : 'Test as fan'}
-              </button>
-            )}
-            {mounted && lastTx && (
-              <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-50">
-                escrow: {lastTx.slice(0, 8)}…
-              </span>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* MAIN */}
-      <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-6 flex flex-col gap-3">
-        <div
-          className="rounded-3xl bg-white/[0.03] border border-white/[0.04] backdrop-blur-xl flex flex-col gap-3 p-4 min-h-[60vh] shadow-[0_12px_60px_rgba(0,0,0,0.25)]"
-          style={{ filter: noir ? 'grayscale(1) contrast(1.05)' : 'none', transition: 'filter 200ms ease' }}
-        >
-          {/* Bind (Stripe fan with no wallet binding yet) */}
-          {mounted && thread?.paid_via === 'stripe' && !thread?.fan_pubkey && role === 'fan' && (
-            <div className="p-3 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 text-sm flex items-center justify-between gap-3">
-              <span className="text-xs md:text-sm">
-                Bind this chat to your wallet.
-              </span>
-              <button
-                className="bg-white text-black text-xs px-3 py-1 rounded-xl"
-                onClick={async () => {
-                  if (!wallet.publicKey) {
-                    alert('Connect wallet first');
-                    return;
-                  }
-                  try {
-                    const signed = await signBindFan(wallet as any, { threadId: thread.id });
-                    const r = await fetch('/api/thread/bind-fan', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        threadId: thread.id,
-                        ...signed,
-                      }),
-                    });
-                    const j = await r.json();
-                    if (!r.ok) {
-                      t('bind_fan_failed', { scope: 'chat', props: { threadId: thread.id, error: j?.error || 'unknown' } });
-                      throw new Error(j?.error || 'Bind failed');
-                    }
-                    t('bind_fan_success', { scope: 'chat', props: { threadId: thread.id } });
-                    mutate();
-                  } catch (e: any) {
-                    alert(e?.message || 'Error');
-                  }
-                }}
-              >
-                Bind now
-              </button>
-            </div>
-          )}
-
-          {/* STATUS STRIP */}
-          <div className="flex items-center justify-between text-[11px] text-white/60">
-            {!thread ? (
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">✓ waiting for payment</span>
-                <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Send unlocks after checkout</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/40 text-emerald-50">✓✓ paid & escrowed</span>
-                {timeLeft && <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Time left: {timeLeft}</span>}
-              </div>
-            )}
-            <button
-              className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-[10px]"
-              onClick={() => setNoir((v) => !v)}
-            >
-              {noir ? 'Show color' : 'Noir view'}
-            </button>
-          </div>
-
-          {/* MESSAGES */}
-          <div
-            ref={listRef}
-            className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-white/10"
-            style={{ filter: noir ? 'grayscale(1) contrast(1.05)' : 'none', transition: 'filter 200ms ease' }}
-          >
-            {messages.map((m: any) => (
-              <div
-                key={m.id}
-                className={
-                  'max-w-[78%] px-4 py-2 rounded-2xl shadow-sm relative ' +
-                  (m.from === 'fan'
-                    ? 'bg-white text-black rounded-bl-md'
-                    : 'bg-[#111827]/90 border border-white/5 rounded-br-md ml-auto')
-                }
-              >
-                <div className="text-[10px] uppercase tracking-wide opacity-40 mb-1">
-                  {m.from === 'fan' ? 'Fan' : 'Creator'}
-                </div>
-                <div className="text-sm leading-relaxed pr-8">{m.body}</div>
-                <div className="absolute bottom-2 right-3 text-[10px] flex items-center gap-1 opacity-60">
-                  <span>{formatMsgStatus(m, thread)}</span>
-                </div>
-              </div>
-            ))}
-            {!messages.length && (
-              <div className="text-sm text-white/25 text-center py-6">
-                No messages yet — start the conversation.
-              </div>
-            )}
-          </div>
-
-          {/* LIMIT HINT (Fan before first creator reply) */}
-          {role === 'fan' && !creatorHasReplied && (
-            <div className="text-[11px] text-white/45">
-              You can send <b>{FAN_PRE_REPLY_LIMIT}</b> messages before the creator replies. Remaining:{' '}
-              <b>{fanRemaining}/{FAN_PRE_REPLY_LIMIT}</b>.
-            </div>
-          )}
-
-          {/* Follow-up & Tip CTAs */}
-          {thread && thread.status === 'answered' && (
-            <div className="grid gap-2 md:grid-cols-2">
-              <button
-                className="px-4 py-2 rounded-2xl border border-white/15 bg-white/5 text-sm"
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    const next = `/c/${creatorHandle}?discount=20`;
-                    window.location.href = next;
-                  }
-                }}
-              >
-                Start follow-up (-20%)
-              </button>
-              <div className="flex items-center gap-2">
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  value={tipAmount}
-                  onChange={(e) => setTipAmount(Number(e.target.value) || 1)}
-                  placeholder="Tip amount"
+      <main className="max-w-5xl mx-auto px-4 py-8 space-y-6 relative z-10">
+        {/* HERO */}
+        <div className={`${panel} rounded-3xl p-6 lg:p-7 relative overflow-hidden`}>
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-emerald-400/10 via-transparent to-cyan-400/15" />
+          <div className="relative flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <img
+                  src={creatorProfile?.avatarDataUrl || '/logo-ror-glass.svg'}
+                  alt="Creator avatar"
+                  className="h-14 w-14 rounded-2xl object-cover border border-white/10"
                 />
-                <button
-                  className="px-3 py-2 rounded-2xl bg-white text-black text-sm"
-                  onClick={async () => {
-                    try {
-                      const r = await fetch('/api/checkout/tip', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ threadId: thread.id, creator: creatorHandle, amount: tipAmount }),
-                      });
-                      const j = await r.json();
-                      if (j?.url) {
-                        setToast('Redirecting to tip checkout…');
-                        setTimeout(() => setToast(null), 1500);
-                        window.location.href = j.url;
-                      }
-                    } catch (e) {
-                      setToast('Tip failed. Try again.');
-                      setTimeout(() => setToast(null), 2000);
-                    }
-                  }}
-                >
-                  Tip creator
-                </button>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-2xl font-black leading-tight">{creatorProfile?.displayName || `@${creatorHandle}`}</div>
+                    <span className={`text-xs px-2 py-1 rounded-full border ${thread?.creator_pubkey ? 'border-emerald-300/40 bg-emerald-400/10 text-emerald-50' : 'border-white/15 bg-white/10 text-white/80'}`}>
+                      @{creatorHandle}
+                    </span>
+                  </div>
+                  <div className="text-sm text-white/60">Private chat · auto-refund if creator misses SLA.</div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.12em]">
+                    <span className={pill}>{statusLabel}</span>
+                    {timeLeft && <span className={pill}>Time left {timeLeft}</span>}
+                    <span className={pill}>{standardWindow}h SLA</span>
+                    {creatorProfile?.answerRate !== null && creatorProfile?.answerRate !== undefined && (
+                      <span className={pill}>Answers {(creatorProfile.answerRate * 100).toFixed(0)}%</span>
+                    )}
+                    {creatorProfile?.avgReplyMs ? (
+                      <span className={pill}>Avg reply {formatMs(creatorProfile.avgReplyMs)}</span>
+                    ) : null}
+                    {mounted && lastTx && (
+                      <span className={pill}>Escrow {lastTx.slice(0, 8)}...</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-2 text-right min-w-[180px]">
+                <div className="text-xs text-white/60">Current view</div>
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  <span className="px-3 py-1 rounded-full text-[11px] border border-white/15 bg-white/5">
+                    {role === 'creator' ? 'Creator' : 'Fan'} mode
+                  </span>
+                  {canActAsFan && (
+                    <button
+                      onClick={() => {
+                        setForceRole((r) => (r ? null : 'fan'));
+                        t('switch_role_test_as_fan', { scope: 'chat', props: { threadId: thread?.id || null } });
+                      }}
+                      className="px-3 py-1 rounded-full text-[11px] border border-white/20 bg-white/10 hover:bg-white/15 transition"
+                    >
+                      {forceRole === 'fan' ? 'Back to creator' : 'Test as fan'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setNoir((v) => !v)}
+                    className="px-3 py-1 rounded-full text-[11px] border border-white/20 bg-white/10 hover:bg-white/15 transition"
+                  >
+                    {noir ? 'Color on' : 'Focus (noir)'}
+                  </button>
+                </div>
+                <div className="text-xs text-white/60">
+                  Standard €{standardPrice.toFixed(2)} · Fast €{fastPrice.toFixed(2)}
+                </div>
               </div>
             </div>
-          )}
+          </div>
+        </div>
 
-          {/* INPUT */}
-          <div className="space-y-2">
-            {/* Pay with card – always available to start a new chat */}
-            {role === 'fan' && !thread && (
-              <div className="space-y-2">
-                <div className="flex gap-2 text-xs text-white/60 items-center flex-wrap">
-                  <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Standard: €{standardPrice.toFixed(2)} · {standardWindow}h</span>
-                  <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Fast: €{fastPrice.toFixed(2)} · {fastWindow}h</span>
-                  {offers.map((o: any) => (
-                    <span key={o.id} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">
-                      {o.title}: €{Number(o.price).toFixed(2)} · {o.replyWindowHours || standardWindow}h
-                    </span>
-                  ))}
+        <div className="grid gap-5 lg:grid-cols-3">
+          {/* LEFT: conversation */}
+          <section className="lg:col-span-2 space-y-5">
+            <div className={`${panel} rounded-3xl overflow-hidden`}>
+              <div className="px-5 py-4 flex flex-wrap items-center justify-between gap-3 border-b border-white/10">
+                <div className="flex items-center gap-2 flex-wrap text-[12px] text-white/80">
+                  <span className={pill}>{statusLabel}</span>
+                  {timeLeft && <span className={pill}>Time left {timeLeft}</span>}
+                  {role === 'fan' && !creatorHasReplied && (
+                    <span className={pill}>Pre-reply cap {fanPreCount}/{FAN_PRE_REPLY_LIMIT}</span>
+                  )}
                 </div>
-                <div className="flex gap-2 flex-wrap">
+                <div className="text-[11px] text-white/60 flex items-center gap-2">
+                  <span>Escrow releases on creator reply</span>
+                  <div className="h-1 w-1 rounded-full bg-white/30" />
+                  <span>Auto-refund on miss</span>
+                </div>
+              </div>
+
+              {/* Bind (Stripe fan with no wallet binding yet) */}
+              {mounted && thread?.paid_via === 'stripe' && !thread?.fan_pubkey && role === 'fan' && (
+                <div className="px-5 py-4 border-b border-white/10 bg-amber-400/10 text-amber-100 flex items-center justify-between gap-3">
+                  <div className="text-sm">Bind this chat to your wallet to keep messaging.</div>
                   <button
-                    onClick={() => setPayVariant('standard')}
-                    className={
-                      'px-4 py-2 rounded-2xl text-sm border ' +
-                      (payVariant === 'standard' ? 'bg-white text-black' : 'border-white/20')
-                    }
-                  >
-                    Standard
-                  </button>
-                  <button
-                    onClick={() => setPayVariant('fast')}
-                    className={
-                      'px-4 py-2 rounded-2xl text-sm border ' +
-                      (payVariant === 'fast' ? 'bg-white text-black' : 'border-white/20')
-                    }
-                  >
-                    Fast reply
-                  </button>
-                  {offers.map((o: any) => (
-                    <button
-                      key={o.id}
-                      onClick={() => {
-                        setSelectedOfferId(o.id);
-                        setPayVariant('standard');
-                      }}
-                      className={
-                        'px-4 py-2 rounded-2xl text-sm border ' +
-                        (selectedOfferId === o.id ? 'bg-white text-black' : 'border-white/20')
-                      }
-                    >
-                      {o.title || 'Custom'}
-                    </button>
-                  ))}
-                  <button
+                    className="bg-white text-black text-xs px-3 py-1 rounded-xl"
                     onClick={async () => {
-                      if (!text.trim()) {
-                        alert('Type your first message first.');
+                      if (!wallet.publicKey) {
+                        alert('Connect wallet first');
                         return;
                       }
                       try {
-                        t('pay_with_card_click', { scope: 'chat', props: { creator: creatorHandle, variant: payVariant } });
-                        const r = await fetch('/api/checkout/create', {
+                        const signed = await signBindFan(wallet as any, { threadId: thread.id });
+                        const r = await fetch('/api/thread/bind-fan', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
-                            creator: creatorHandle,
-                            amount: selectedOffer ? selectedOffer.price : payVariant === 'fast' ? fastPrice : standardPrice,
-                            ttlHours: selectedOffer ? selectedOffer.replyWindowHours || standardWindow : payVariant === 'fast' ? fastWindow : standardWindow,
-                            firstMessage: text,
-                            variant: selectedOffer ? `offer:${selectedOffer.id}` : payVariant,
-                            ...(selectedOffer ? { offerId: selectedOffer.id, offerTitle: selectedOffer.title || '' } : {}),
-                            ...(discountPercent ? { discountPercent } : {}),
-                            ...(ref ? { ref } : {}),
+                            threadId: thread.id,
+                            ...signed,
                           }),
                         });
                         const j = await r.json();
-                        if (j?.url) {
-                          setToast('Redirecting to secure checkout…');
-                          setTimeout(() => setToast(null), 1500);
-                          window.location.href = j.url;
-                        } else {
-                          setToast('Redirecting to secure checkout…');
-                          setTimeout(() => setToast(null), 1500);
+                        if (!r.ok) {
+                          t('bind_fan_failed', { scope: 'chat', props: { threadId: thread.id, error: j?.error || 'unknown' } });
+                          throw new Error(j?.error || 'Bind failed');
                         }
-                      } catch (e) {
-                        console.error(e);
-                        setToast('Checkout failed. Try again.');
-                        setTimeout(() => setToast(null), 2000);
+                        t('bind_fan_success', { scope: 'chat', props: { threadId: thread.id } });
+                        mutate();
+                      } catch (e: any) {
+                        alert(e?.message || 'Error');
                       }
                     }}
-                    className="bg-white text-black text-sm px-4 py-2 rounded-2xl shadow-sm"
                   >
-                    Pay with card to start
+                    Bind now
                   </button>
                 </div>
-              </div>
-            )}
+              )}
 
-            <textarea
-              className="w-full bg-black/30 border border-white/5 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-white/15 disabled:opacity-40"
-              placeholder={role === 'creator' ? 'Write your reply…' : thread ? 'Write your message…' : 'Type your message, then pay to send'}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                const isMobile =
-                  typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent);
-                if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
-                  e.preventDefault();
-                  if (canSend) send();
-                }
-              }}
-              disabled={(!!thread && !isConnected) || fanLimitReached}
-              title={
-                fanLimitReached
-                  ? 'Pre-reply limit reached. Please wait for the creator to respond.'
-                  : undefined
-              }
-              onFocus={() => setShowLimitHint(false)}
-            />
-            <div className="flex items-center gap-2 justify-between">
-              <button
-                onClick={send}
-                className="bg-white text-black text-sm px-5 py-2 rounded-2xl disabled:opacity-40 shadow-sm"
-                disabled={!canSend}
-                title={!canSend && fanLimitReached ? 'Pre-reply limit reached.' : undefined}
-                onMouseEnter={() => { if (fanLimitReached) setShowLimitHint(true); }}
-                onMouseLeave={() => setShowLimitHint(false)}
+              <div
+                ref={listRef}
+                className="flex-1 max-h-[60vh] overflow-y-auto space-y-3 px-5 py-5 scrollbar-thin scrollbar-thumb-white/10"
+                style={{ filter: noir ? 'grayscale(1) contrast(1.05)' : 'none', transition: 'filter 200ms ease' }}
               >
-                {sending
-                  ? 'Sending…'
-                  : role === 'creator'
-                  ? 'Send reply'
-                  : !thread
-                  ? 'Locked until paid'
-                  : fanLimitReached && !creatorHasReplied
-                  ? 'Limit reached'
-                  : 'Send & lock'}
+                {messages.map((m: any) => (
+                  <div
+                    key={m.id}
+                    className={
+                      'max-w-[78%] px-4 py-3 rounded-2xl shadow-sm relative ' +
+                      (m.from === 'fan'
+                        ? 'bg-white text-black rounded-bl-md'
+                        : 'bg-[#0f172a]/90 border border-white/10 rounded-br-md ml-auto text-white')
+                    }
+                  >
+                    <div className="text-[10px] uppercase tracking-wide opacity-50 mb-1">
+                      {m.from === 'fan' ? 'Fan' : 'Creator'}
+                    </div>
+                    <div className="text-sm leading-relaxed pr-8 break-words whitespace-pre-wrap">{m.body}</div>
+                    <div className="absolute bottom-2 right-3 text-[10px] flex items-center gap-1 opacity-60">
+                      <span>{formatMsgStatus(m, thread)}</span>
+                    </div>
+                  </div>
+                ))}
+                {!messages.length && (
+                  <div className="text-sm text-white/35 text-center py-8">
+                    No messages yet — send your opener after checkout.
+                  </div>
+                )}
+              </div>
+
+              {role === 'fan' && !creatorHasReplied && (
+                <div className="px-5 pb-1 text-[11px] text-white/55">
+                  You can send <b>{FAN_PRE_REPLY_LIMIT}</b> messages before the creator replies. Remaining: <b>{fanRemaining}/{FAN_PRE_REPLY_LIMIT}</b>.
+                </div>
+              )}
+
+              {thread && thread.status === 'answered' && (
+                <div className="px-5 pb-4 pt-2 border-t border-white/10 grid gap-3 md:grid-cols-2">
+                  <button
+                    className="px-4 py-3 rounded-2xl border border-white/15 bg-white/10 text-sm text-left hover:bg-white/15 transition"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        const next = `/c/${creatorHandle}?discount=20`;
+                        window.location.href = next;
+                      }
+                    }}
+                  >
+                    <div className="font-semibold">Start follow-up (-20%)</div>
+                    <div className="text-xs text-white/70">Return with a discount and keep the thread warm.</div>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="input"
+                      type="number"
+                      min={1}
+                      value={tipAmount}
+                      onChange={(e) => setTipAmount(Number(e.target.value) || 1)}
+                      placeholder="Tip amount"
+                    />
+                    <button
+                      className="px-4 py-3 rounded-2xl bg-white text-black text-sm hover:shadow"
+                      onClick={async () => {
+                        try {
+                          const r = await fetch('/api/checkout/tip', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ threadId: thread.id, creator: creatorHandle, amount: tipAmount }),
+                          });
+                          const j = await r.json();
+                          if (j?.url) {
+                            setToast('Redirecting to tip checkout...');
+                            setTimeout(() => setToast(null), 1500);
+                            window.location.href = j.url;
+                          }
+                        } catch (e) {
+                          setToast('Tip failed. Try again.');
+                          setTimeout(() => setToast(null), 2000);
+                        }
+                      }}
+                    >
+                      Tip creator
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* INPUT */}
+              <div className="px-5 py-4 border-t border-white/10 space-y-3">
+                {role === 'fan' && !thread && (
+                  <div className="text-xs text-white/70 flex flex-wrap items-center gap-2">
+                    <span className={pill}>Standard €{standardPrice.toFixed(2)} · {standardWindow}h</span>
+                    <span className={pill}>Fast €{fastPrice.toFixed(2)} · {fastWindow}h</span>
+                    {offers.map((o: any) => (
+                      <span key={o.id} className={pill}>
+                        {o.title}: €{Number(o.price).toFixed(2)} · {o.replyWindowHours || standardWindow}h
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <textarea
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-white/15 disabled:opacity-40"
+                  placeholder={role === 'creator' ? 'Write your reply...' : thread ? 'Write your message...' : 'Type your message, then pay to send'}
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    const isMobile =
+                      typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent);
+                    if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
+                      e.preventDefault();
+                      if (canSend) send();
+                    }
+                  }}
+                  disabled={(!!thread && !isConnected) || fanLimitReached}
+                  title={
+                    fanLimitReached
+                      ? 'Pre-reply limit reached. Please wait for the creator to respond.'
+                      : undefined
+                  }
+                  onFocus={() => setShowLimitHint(false)}
+                />
+                <div className="flex items-center gap-2 justify-between">
+                  <button
+                    onClick={send}
+                    className="bg-white text-black text-sm px-5 py-2 rounded-2xl disabled:opacity-40 shadow-sm"
+                    disabled={!canSend}
+                    title={!canSend && fanLimitReached ? 'Pre-reply limit reached.' : undefined}
+                    onMouseEnter={() => { if (fanLimitReached) setShowLimitHint(true); }}
+                    onMouseLeave={() => setShowLimitHint(false)}
+                  >
+                    {sending
+                      ? 'Sending...'
+                      : role === 'creator'
+                      ? 'Send reply'
+                      : !thread
+                      ? 'Locked until paid'
+                      : fanLimitReached && !creatorHasReplied
+                      ? 'Limit reached'
+                      : 'Send'}
+                  </button>
+                  <span className="text-[11px] text-white/40">
+                    {role === 'creator'
+                      ? 'First substantial reply releases escrow.'
+                      : 'Enter = send (desktop)'}
+                  </span>
+                </div>
+
+                {fanLimitReached && !creatorHasReplied && showLimitHint && (
+                  <div className="text-[11px] text-white/60">
+                    You can send at most {FAN_PRE_REPLY_LIMIT} messages before the creator's first reply.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* RIGHT: actions */}
+          <aside className="space-y-5">
+            <div className={`${panel} rounded-3xl p-5 space-y-4`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Start or restart chat</div>
+                  <p className="text-xs text-white/60">Card checkout opens escrow. Creator replies within SLA or you get auto-refund.</p>
+                </div>
+                <div className="text-[11px] px-3 py-1 rounded-full border border-white/15 bg-white/10">High trust</div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setPayVariant('standard')}
+                  className={
+                    'px-4 py-2 rounded-2xl text-sm border ' +
+                    (payVariant === 'standard' ? 'bg-white text-black' : 'border-white/30')
+                  }
+                >
+                  Standard · €{standardPrice.toFixed(2)}
+                </button>
+                <button
+                  onClick={() => setPayVariant('fast')}
+                  className={
+                    'px-4 py-2 rounded-2xl text-sm border ' +
+                    (payVariant === 'fast' ? 'bg-white text-black' : 'border-white/30')
+                  }
+                >
+                  Fast · €{fastPrice.toFixed(2)}
+                </button>
+                {offers.map((o: any) => (
+                  <button
+                    key={o.id}
+                    onClick={() => {
+                      setSelectedOfferId(o.id);
+                      setPayVariant('standard');
+                    }}
+                    className={
+                      'px-4 py-2 rounded-2xl text-sm border ' +
+                      (selectedOfferId === o.id ? 'bg-white text-black' : 'border-white/30')
+                    }
+                  >
+                    {o.title || 'Custom'} · €{Number(o.price || 0).toFixed(2)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="text-xs text-white/65 flex flex-col gap-1">
+                <span>Standard: {standardWindow}h reply window</span>
+                <span>Fast: {fastWindow}h reply window</span>
+                {selectedOffer && (
+                  <span>Selected offer window: {selectedOffer.replyWindowHours || standardWindow}h</span>
+                )}
+              </div>
+
+              <button
+                onClick={async () => {
+                  if (!text.trim()) {
+                    alert('Type your first message first.');
+                    return;
+                  }
+                  try {
+                    t('pay_with_card_click', { scope: 'chat', props: { creator: creatorHandle, variant: payVariant } });
+                    const r = await fetch('/api/checkout/create', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        creator: creatorHandle,
+                        amount: selectedOffer ? selectedOffer.price : payVariant === 'fast' ? fastPrice : standardPrice,
+                        ttlHours: selectedOffer ? selectedOffer.replyWindowHours || standardWindow : payVariant === 'fast' ? fastWindow : standardWindow,
+                        firstMessage: text,
+                        variant: selectedOffer ? `offer:${selectedOffer.id}` : payVariant,
+                        ...(selectedOffer ? { offerId: selectedOffer.id, offerTitle: selectedOffer.title || '' } : {}),
+                        ...(discountPercent ? { discountPercent } : {}),
+                        ...(ref ? { ref } : {}),
+                      }),
+                    });
+                    const j = await r.json();
+                    if (j?.url) {
+                      setToast('Redirecting to secure checkout...');
+                      setTimeout(() => setToast(null), 1500);
+                      window.location.href = j.url;
+                    } else {
+                      setToast('Redirecting to secure checkout...');
+                      setTimeout(() => setToast(null), 1500);
+                    }
+                  } catch (e) {
+                    console.error(e);
+                    setToast('Checkout failed. Try again.');
+                    setTimeout(() => setToast(null), 2000);
+                  }
+                }}
+                className="w-full bg-white text-black text-sm px-4 py-3 rounded-2xl shadow hover:translate-y-[-1px] transition"
+              >
+                Pay with card to start
               </button>
-              <span className="text-[11px] text-white/35">
-                {role === 'creator'
-                  ? 'First substantial reply releases escrow.'
-                  : 'Enter = send (desktop)'}
-              </span>
+              <div className="text-[11px] text-white/55">
+                Your first message is sent after checkout. Escrow releases when the creator replies within SLA.
+              </div>
             </div>
 
-            {fanLimitReached && !creatorHasReplied && showLimitHint && (
-              <div className="text-[11px] text-white/60">
-                You can send at most {FAN_PRE_REPLY_LIMIT} messages before the creator’s first reply.
+            <div className={`${panel} rounded-3xl p-5 space-y-3`}>
+              <div className="text-sm font-semibold">Thread facts</div>
+              <div className="text-xs text-white/70 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span>Status</span>
+                  <span className="px-2 py-1 rounded-full bg-white/10 border border-white/15 text-[11px]">{statusLabel}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Payment</span>
+                  <span className="text-white/80">{thread?.paid_via ? thread.paid_via : 'Card on start'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Messages</span>
+                  <span className="text-white/80">{messages.length}</span>
+                </div>
+                {thread?.fan_pubkey && (
+                  <div className="flex items-center justify-between">
+                    <span>Fan wallet</span>
+                    <span className="text-white/80">{thread.fan_pubkey.slice(0, 6)}...</span>
+                  </div>
+                )}
+                {thread?.creator_pubkey && (
+                  <div className="flex items-center justify-between">
+                    <span>Creator wallet</span>
+                    <span className="text-white/80">{thread.creator_pubkey.slice(0, 6)}...</span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Toast */}
-        {toast && (
-          <div className="fixed bottom-4 right-4 px-4 py-2 rounded-xl bg-white text-black text-sm shadow-lg border border-black/5">
-            {toast}
-          </div>
-        )}
+            <div className={`${panel} rounded-3xl p-5 space-y-2`}>
+              <div className="text-sm font-semibold">Safety & refund</div>
+              <div className="text-xs text-white/65 space-y-2">
+                <div className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />Escrow auto-refunds if SLA is missed.</div>
+                <div className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />Creator must reply with a substantial message.</div>
+                <div className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />Wallet-signed messages bind sender identity.</div>
+              </div>
+            </div>
+          </aside>
+        </div>
       </main>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 px-4 py-2 rounded-xl bg-white text-black text-sm shadow-lg border border-black/5">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
@@ -636,13 +708,14 @@ function formatMs(ms: number) {
 }
 
 function formatMsgStatus(m: any, thread: any) {
-  if (!thread) return '✓ pending';
-  if (thread.status === 'refunded') return '✓ refunded';
-  if (thread.status === 'answered') return '✓✓ delivered';
-  if (thread.status === 'open') return '✓✓ escrowed';
-  return '✓ sent';
+  if (!thread) return 'pending';
+  if (thread.status === 'refunded') return 'refunded';
+  if (thread.status === 'answered') return 'delivered';
+  if (thread.status === 'open') return 'escrowed';
+  return 'sent';
 }
 
 export async function getServerSideProps(ctx: any) {
   return { props: { handle: ctx.params.slug } };
 }
+

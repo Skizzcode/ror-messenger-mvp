@@ -1,4 +1,4 @@
-// pages/creator/[handle].tsx
+﻿// pages/creator/[handle].tsx
 import useSWR from 'swr';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -50,7 +50,6 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   const authorized = !!authz?.ok;
   const needsVerification = authz?.error === 'EMAIL_NOT_VERIFIED' || authz?.needsVerification;
   const adminBypass = !!authz?.adminBypass;
-  const mustAuth = !authorized && !needsVerification;
 
   // 2) Data nur wenn authorized
   const authedFetcher = (url: string) =>
@@ -167,7 +166,6 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   }
 
   async function startSession() {
-    // 1x kurz signieren -> Cookie holen
     const hdrs = await signAuthHeaders(wallet as any);
     if (!hdrs) {
       alert('Connect a wallet that supports message signing.');
@@ -269,47 +267,58 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
     const m = Math.floor((ms % 3600000) / 60000);
     return `${h}h ${m}m`;
   }
-
   const isPearl = theme === 'pearl';
-  const surface = isPearl
-    ? 'bg-white text-black border border-black/10 shadow-[0_20px_80px_rgba(0,0,0,0.12)]'
-    : 'bg-white/5 text-white border border-white/10 shadow-[0_20px_80px_rgba(0,0,0,0.35)]';
-  const labelTone = isPearl ? 'text-black/60' : 'text-white/60';
-  const hintTone = isPearl ? 'text-black/45' : 'text-white/45';
-  const dividerTone = isPearl ? 'bg-black/10' : 'bg-white/10';
+  const shell = isPearl
+    ? 'bg-gradient-to-br from-[#f7f9ff] via-white to-[#eef2ff] text-[#0b1220]'
+    : 'bg-gradient-to-br from-[#05060d] via-[#0c1224] to-[#05070f] text-white';
+  const glass = isPearl
+    ? 'bg-white/90 border border-black/5 shadow-[0_25px_90px_rgba(15,23,42,0.08)]'
+    : 'bg-white/5 border border-white/10 shadow-[0_30px_120px_rgba(0,0,0,0.55)]';
+  const softGlass = isPearl
+    ? 'bg-black/5 border border-black/10'
+    : 'bg-white/5 border border-white/10';
+  const labelTone = isPearl ? 'text-slate-700' : 'text-white/70';
+  const hintTone = isPearl ? 'text-slate-500' : 'text-white/50';
+  const mutedTone = isPearl ? 'text-slate-600' : 'text-white/60';
+  const dividerTone = isPearl ? 'bg-black/5' : 'bg-white/10';
   const inputTone = isPearl
-    ? '!bg-black/5 !border-black/10 !text-black placeholder:!text-black/40'
+    ? '!bg-white !border-black/10 !text-black placeholder:!text-slate-400'
     : '!bg-white/5 !border-white/10 !text-white placeholder:!text-white/40';
   const textareaTone = isPearl
-    ? 'bg-black/5 border border-black/10 text-black placeholder:text-black/40'
+    ? 'bg-white border border-black/10 text-black placeholder:text-slate-400'
     : 'bg-white/5 border border-white/10 text-white placeholder:text-white/40';
+  const pill = isPearl ? 'bg-black/5 text-black border border-black/10' : 'bg-white/10 text-white border border-white/10';
 
   return (
-    <div className={`min-h-screen ${isPearl ? 'bg-white text-black' : 'bg-background text-white'}`}>
-      {/* GLOBAL HEADER */}
-      <header className="sticky top-0 z-30 bg-background/60 backdrop-blur border-b border-white/10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <Link href="/" className="flex items-center gap-2 group">
+    <div className={`min-h-screen relative overflow-hidden ${shell}`}>
+      <div className="pointer-events-none absolute -top-24 -right-16 h-80 w-80 bg-emerald-400/25 blur-3xl rounded-full" />
+      <div className="pointer-events-none absolute top-10 -left-10 h-64 w-64 bg-cyan-400/20 blur-3xl rounded-full" />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.07] bg-[radial-gradient(circle_at_18%_22%,#ffffff,transparent_26%),radial-gradient(circle_at_82%_0%,#7cffe0,transparent_20%)]" />
+
+      <header className={`sticky top-0 z-40 border-b backdrop-blur ${isPearl ? 'bg-white/60 border-black/5' : 'bg-[#05060d]/70 border-white/10'}`}>
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <Link href="/" className="flex items-center gap-3 group">
             <img
               src="/logo-ror-glass.svg"
               alt="RoR"
-              className="h-12 w-12 rounded-2xl  object-contain"
+              className="h-11 w-11 rounded-2xl object-contain shadow-lg"
             />
-            <span className="font-bold tracking-tight group-hover:opacity-80 transition">
-              Reply or Refund
-            </span>
+            <div>
+              <div className="font-bold tracking-tight group-hover:opacity-80 transition">Reply or Refund</div>
+              <div className={`text-[11px] uppercase tracking-[0.15em] ${mutedTone}`}>Creator OS</div>
+            </div>
           </Link>
           <div className="flex items-center gap-2">
             <button
-              className="text-xs px-3 py-1 rounded-full border border-white/20 hover:bg-white/10"
-              onClick={() => setTheme((t) => (t === 'pearl' ? 'diamond' : 'pearl'))}
+              className="text-xs px-3 py-1 rounded-full border border-white/20 hover:opacity-80 transition"
+              onClick={() => setTheme((tTheme) => (tTheme === 'pearl' ? 'diamond' : 'pearl'))}
             >
-              {isPearl ? 'Black diamond' : 'White pearl'}
+              {isPearl ? 'Switch to Diamond' : 'Switch to Pearl'}
             </button>
-            <WalletMultiButtonDynamic className="!bg-white !text-black !rounded-2xl !h-8 !px-3 !py-0 !text-sm !shadow" />
+            <WalletMultiButtonDynamic className="!bg-white !text-black !rounded-2xl !h-9 !px-3 !py-0 !text-sm !shadow" />
             {authorized && (
               <button
-                className="text-xs px-3 py-1 rounded-full border border-white/20 hover:bg-white/10"
+                className="text-xs px-3 py-1 rounded-full border border-white/20 hover:opacity-80 transition"
                 onClick={endSession}
               >
                 Sign out
@@ -321,437 +330,541 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
 
       {/* GATE */}
       {!authorized && !adminBypass ? (
-        <main className="max-w-5xl mx-auto px-4 py-16">
-          <div className="max-w-lg mx-auto card p-6 text-center">
-            <div className="text-lg font-semibold mb-1">Creator dashboard</div>
-            <div className="text-sm text-white/60">
-              Connect the creator wallet bound to <b>@{handle}</b> and sign once to start a 60-minute session.
+        <main className="max-w-4xl mx-auto px-4 py-16 relative z-10">
+          <div className={`max-w-xl mx-auto ${glass} rounded-3xl p-8 text-center relative overflow-hidden`}>
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/10 via-transparent to-cyan-400/5 pointer-events-none" />
+            <div className="text-xs uppercase tracking-[0.2em] font-semibold text-emerald-300">Creator Access</div>
+            <div className="text-2xl font-black mt-2">Unlock your command center</div>
+            <div className={`${mutedTone} text-sm mt-2`}>
+              Connect the wallet bound to <b>@{handle}</b> and sign once to start a 60-minute session.
             </div>
-            <div className="mt-6 flex items-center justify-center gap-2">
+            <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
               <WalletMultiButtonDynamic className="!bg-white !text-black !rounded-2xl !h-9 !px-4 !py-0 !text-sm !shadow" />
               <button className="btn" onClick={startSession}>Sign in</button>
             </div>
             {authzErr && (
-              <div className="mt-4 text-[11px] text-red-300/80">
+              <div className="mt-4 text-[11px] text-red-400">
                 Access denied. Make sure you're connected with the bound creator wallet.
               </div>
             )}
             {!authz && (
-              <div className="mt-4 text-[11px] text-white/50">
+              <div className="mt-4 text-[11px] text-white/60">
                 You cannot view any creator dashboard except your own (wallet-bound).
               </div>
             )}
           </div>
         </main>
       ) : needsVerification && !adminBypass ? (
-        <main className="max-w-5xl mx-auto px-4 py-16">
-          <div className="max-w-lg mx-auto card p-6 space-y-4 text-center">
-            <div className="text-lg font-semibold">Verify your email</div>
-            <p className="text-sm text-white/60">Enter the verification code we sent to your email to unlock your dashboard.</p>
+        <main className="max-w-4xl mx-auto px-4 py-16 relative z-10">
+          <div className={`max-w-xl mx-auto ${glass} rounded-3xl p-8 space-y-5 text-center`}>
+            <div className="text-xs uppercase tracking-[0.2em] font-semibold text-emerald-300">Trust layer</div>
+            <div className="text-2xl font-black">Verify your email</div>
+            <p className={`${mutedTone} text-sm`}>
+              Enter the verification code we sent to your email to unlock your dashboard.
+            </p>
             <VerificationForm handle={handle} onVerified={() => mutateAuthz()} />
           </div>
         </main>
       ) : (
         <>
-          {/* DASHBOARD HEADER */}
-          <header className={`z-20 backdrop-blur border-b ${isPearl ? 'bg-white/70 border-black/5 text-black' : 'bg-background/60 border-white/10'}`}>
-            <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <img
-                  src={avatarDataUrl || '/logo-ror-glass.svg'}
-                  className="h-12 w-12 rounded-2xl  object-cover"
-                  alt="Creator avatar"
-                />
-                <div>
-                  <div className="font-black text-lg">
-                    {displayName ? displayName : `@${handle}`}
-                  </div>
-                  <div className={`text-xs ${isPearl ? 'text-black/50' : 'text-white/35'}`}>Creator dashboard</div>
-                </div>
-              </div>
-              <div className={`text-sm ${isPearl ? 'text-black/50' : 'text-white/40'}`}>@{handle}</div>
-            </div>
-          </header>
-
-          {/* MAIN */}
-          <main className="max-w-5xl mx-auto px-4 py-6 grid gap-6 md:grid-cols-3">
-            {/* LEFT */}
-            <section className="md:col-span-2 space-y-6">
-              {/* Session / trust strip */}
-              <div className={`p-3 rounded-2xl flex flex-wrap items-center gap-3 justify-between ${surface}`}>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="px-2 py-1 rounded-full bg-emerald-400/10 text-emerald-100 border border-emerald-400/30 text-[11px]">
-                    Session active
-                  </span>
-                  <span className="px-2 py-1 rounded-full bg-white/5 text-white/70 border border-white/10 text-[11px]">
-                    {`${replyWindowHours}h reply - auto refund`}
-                  </span>
-                  <span className="px-2 py-1 rounded-full bg-white/5 text-white/70 border border-white/10 text-[11px]">
-                    {email ? 'Email on file' : 'Add email for ops'}
-                  </span>
-                </div>
-                <div className="text-[11px] text-white/50">
-                  Fans see your SLA badge. Keep replies inside the window to unlock escrow.
-                </div>
-              </div>
-
-              {/* Profile completeness */}
-              <div className="card p-4 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between text-sm font-semibold">
-                  <span>Profile completeness</span>
-                  <span className="text-xs text-white/60">{completeness}%</span>
-                </div>
-                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-emerald-400 to-cyan-300 transition-all"
-                    style={{ width: `${completeness}%` }}
-                  />
-                </div>
-                <div className="text-[11px] text-white/50">
-                  Fill email, name, avatar, price, reply window to boost trust on your public page.
-                </div>
-              </div>
-
-              {/* STATS */}
-              <div className="grid grid-cols-4 gap-3">
-                <div className={`p-3 rounded-xl col-span-4 md:col-span-2 ${surface}`}>
-                  <div className={`text-xs ${isPearl ? 'text-black/50' : 'text-white/40'}`}>Earnings (MTD)</div>
-                  <div className="text-2xl font-bold">EUR {(stats?.revenue?.mtd ?? 0).toFixed(2)}</div>
-                  <div className={`text-xs mt-1 ${isPearl ? 'text-black/50' : 'text-white/40'}`}>
-                    All-time: EUR {(stats?.revenue?.allTime ?? 0).toFixed(2)}
-                  </div>
-                </div>
-                <Stat label="Open" value={totals.open} isPearl={isPearl} />
-                <Stat label="Answered" value={totals.answered} isPearl={isPearl} />
-                <Stat label="Refunded" value={totals.refunded} isPearl={isPearl} />
-                <Stat label="All" value={totals.all} isPearl={isPearl} />
-              </div>
-
-              {/* THREADS */}
-              <Tabs
-                tabs={[
-                  { key: 'open', label: 'Open', items: threads?.grouped?.open || [] },
-                  { key: 'answered', label: 'Answered', items: threads?.grouped?.answered || [] },
-                  { key: 'refunded', label: 'Refunded', items: threads?.grouped?.refunded || [] },
-                ]}
-                renderItem={(tItem: any) => (
-                  <div
-                    key={tItem.id}
-                    className={`p-3 rounded-xl flex items-center justify-between ${surface}`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className="font-semibold">{tItem.id.slice(0, 8)}...</div>
-                        <span className={`${isPearl ? 'text-[10px] px-2 py-0.5 rounded-full bg-black/5 border border-black/10' : 'text-[10px] px-2 py-0.5 rounded-full bg-white/10'}`}>
-                          {`EUR ${Number(tItem.amount || 0).toFixed(2)}`}
-                        </span>
-                        <span
-                          className={
-                            'text-[10px] px-2 py-0.5 rounded-full ' +
-                            (tItem.status === 'open'
-                              ? 'bg-emerald-400/10 text-emerald-50 border border-emerald-400/40'
-                              : tItem.status === 'answered'
-                              ? isPearl ? 'bg-black/5 text-black border border-black/10' : 'bg-white/10 text-white/80 border border-white/15'
-                              : 'bg-red-400/10 text-red-50 border border-red-400/25')
-                          }
-                        >
-                          {tItem.status.toUpperCase()}
-                        </span>
+          {/* DASHBOARD */}
+          <main className="max-w-6xl mx-auto px-4 py-8 space-y-7 relative z-10">
+            <section className="grid lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                {/* HERO */}
+                <div className={`${glass} rounded-3xl p-6 lg:p-7 relative overflow-hidden`}>
+                  <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-emerald-400/10 via-transparent to-cyan-400/10" />
+                  <div className="relative flex flex-wrap items-start justify-between gap-6">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.16em]">
+                        <span className={`px-3 py-1 rounded-full ${pill}`}>Creator OS</span>
+                        <span className={`px-3 py-1 rounded-full ${pill}`}>{replyWindowHours}h reply SLA</span>
+                        <span className={`px-3 py-1 rounded-full ${pill}`}>{email ? 'Email on file' : 'Add ops email'}</span>
                       </div>
-                      <div className={`text-xs ${isPearl ? 'text-black/60' : 'text-white/40'} space-y-1`}>
-                        <div>
-                          {tItem.messagesCount} msgs
-                          {tItem.status === 'open' && <> - {formatRemaining(tItem.remainingMs)} left</>}
-                          {tItem.fanPubkey ? <> - fan: {tItem.fanPubkey.slice(0, 6)}...</> : null}
+                      <div>
+                        <div className="text-3xl font-black leading-tight flex items-center gap-2">
+                          Creator command center
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${isPearl ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-400/20 text-emerald-100 border border-emerald-300/20'}`}>
+                            @{handle}
+                          </span>
                         </div>
-                        {tItem.lastMessageBody && (
-                          <div className={`${isPearl ? 'text-black/70' : 'text-white/65'} text-[11px] line-clamp-1`}>
-                            Last {tItem.lastMessageFrom}: {tItem.lastMessageBody}
-                          </div>
+                        <p className={`${mutedTone} text-sm mt-2 max-w-2xl`}>
+                          Everything you need to keep replies inside SLA, showcase your profile, and grow referrals without digging through settings.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          className="btn"
+                          onClick={() => {
+                            navigator.clipboard.writeText(chatLink);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 1600);
+                            showToast('Chat link copied');
+                          }}
+                        >
+                          Copy chat link
+                        </button>
+                        {refLink && (
+                          <button
+                            className="btn"
+                            onClick={() => {
+                              navigator.clipboard.writeText(refLink);
+                              setCopied(true);
+                              setTimeout(() => setCopied(false), 1600);
+                              showToast('Referral link copied');
+                            }}
+                          >
+                            Copy referral link
+                          </button>
                         )}
+                        <button
+                          className={`px-4 py-2 rounded-full text-sm border transition ${isPearl ? 'border-black/10 hover:bg-black/5' : 'border-white/20 hover:bg-white/10'}`}
+                          onClick={() => saveSettings()}
+                        >
+                          {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Save changes'}
+                        </button>
                       </div>
                     </div>
-                    <Link
-                      href={`/c/${tItem.id}`}
-                      className="btn"
-                      onClick={() =>
-                        t('creator_open_chat_click', { scope: 'creator_dashboard', props: { threadId: tItem.id } })
-                      }
-                    >
-                      Open chat
-                    </Link>
+                    <div className={`p-4 rounded-2xl min-w-[240px] ${softGlass}`}>
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={avatarDataUrl || '/logo-ror-glass.svg'}
+                          className="h-12 w-12 rounded-2xl object-cover border border-white/10"
+                          alt="Creator avatar"
+                        />
+                        <div>
+                          <div className="font-semibold text-lg">{displayName || `@${handle}`}</div>
+                          <div className={`text-xs ${mutedTone}`}>Session active · {replyWindowHours}h SLA</div>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between text-xs font-semibold">
+                          <span className={mutedTone}>Profile completeness</span>
+                          <span className={mutedTone}>{completeness}%</span>
+                        </div>
+                        <div className={`h-2 mt-2 rounded-full overflow-hidden ${isPearl ? 'bg-black/5' : 'bg-white/10'}`}>
+                          <div
+                            className="h-full bg-gradient-to-r from-emerald-400 via-cyan-300 to-blue-300 transition-all"
+                            style={{ width: `${completeness}%` }}
+                          />
+                        </div>
+                        <p className={`text-[11px] mt-2 ${mutedTone}`}>
+                          Fill name, avatar, email, price and reply window to boost trust on your public page.
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                )}
-              />
-            </section>
 
-            {/* RIGHT */}
-                                    <aside className="space-y-6">
-              {/* Profile & settings */}
-              <div className={`${surface} p-4 space-y-4 rounded-2xl`}>
-                <div className="font-semibold text-lg">Profile</div>
+                  <div className="relative mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <Stat label="Earnings (MTD)" value={`EUR ${(stats?.revenue?.mtd ?? 0).toFixed(2)}`} isPearl={isPearl} />
+                    <Stat label="Earnings (all time)" value={`EUR ${(stats?.revenue?.allTime ?? 0).toFixed(2)}`} isPearl={isPearl} />
+                    <Stat label="Open threads" value={totals.open} isPearl={isPearl} />
+                    <Stat label="Answered" value={totals.answered} isPearl={isPearl} />
+                  </div>
+                </div>
 
-                <label className={`text-sm ${labelTone}`}>Email (ops/payout contact)</label>
-                <input
-                  className={`input ${inputTone}`}
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                {/* THREADS */}
+                <div className={`${glass} rounded-3xl p-6 space-y-5`}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Inbox & threads</div>
+                      <p className={`${mutedTone} text-xs`}>Live view · refreshes every 12s</p>
+                    </div>
+                    <div className={`text-[11px] px-3 py-1 rounded-full ${pill}`}>
+                      Escrow unlocks after you answer inside SLA
+                    </div>
+                  </div>
+                  <Tabs
+                    tabs={[
+                      { key: 'open', label: 'Open', items: threads?.grouped?.open || [] },
+                      { key: 'answered', label: 'Answered', items: threads?.grouped?.answered || [] },
+                      { key: 'refunded', label: 'Refunded', items: threads?.grouped?.refunded || [] },
+                    ]}
+                    renderItem={(tItem: any) => (
+                      <div
+                        key={tItem.id}
+                        className={`p-4 rounded-2xl flex flex-col gap-3 border ${isPearl ? 'bg-white/80 border-black/5 shadow-sm' : 'bg-white/5 border-white/10'}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="font-semibold text-lg">#{tItem.id.slice(0, 8)}</div>
+                              <span className="px-2 py-1 text-[11px] rounded-full bg-emerald-400/20 text-emerald-900 dark:text-emerald-50 border border-emerald-400/30">
+                                EUR {Number(tItem.amount || 0).toFixed(2)}
+                              </span>
+                              <span
+                                className={
+                                  'text-[11px] px-2 py-1 rounded-full border ' +
+                                  (tItem.status === 'open'
+                                    ? 'bg-amber-400/10 text-amber-700 border-amber-400/30 dark:text-amber-100'
+                                    : tItem.status === 'answered'
+                                    ? 'bg-emerald-400/10 text-emerald-700 border-emerald-400/25 dark:text-emerald-100'
+                                    : 'bg-red-400/10 text-red-700 border-red-400/25 dark:text-red-100')
+                                }
+                              >
+                                {tItem.status.toUpperCase()}
+                              </span>
+                            </div>
+                            <div className={`text-xs ${mutedTone}`}>
+                              {tItem.messagesCount} msgs
+                              {tItem.status === 'open' && <> · {formatRemaining(tItem.remainingMs)} left</>}
+                              {tItem.fanPubkey ? <> · fan: {tItem.fanPubkey.slice(0, 6)}...</> : null}
+                            </div>
+                            {tItem.lastMessageBody && (
+                              <div className={`${isPearl ? 'text-slate-800' : 'text-white/80'} text-[12px] line-clamp-1`}>
+                                Last {tItem.lastMessageFrom}: {tItem.lastMessageBody}
+                              </div>
+                            )}
+                          </div>
+                          <Link
+                            href={`/c/${tItem.id}`}
+                            className="btn"
+                            onClick={() =>
+                              t('creator_open_chat_click', { scope: 'creator_dashboard', props: { threadId: tItem.id } })
+                            }
+                          >
+                            Open chat
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+                  />
+                </div>
 
-                <label className={`text-sm ${labelTone}`}>Display name</label>
-                <input
-                  className={`input ${inputTone}`}
-                  placeholder="Your public name"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                />
+                {/* SHARE KIT */}
+                <div className={`${glass} rounded-3xl p-6 space-y-4`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Share & invites</div>
+                      <p className={`${mutedTone} text-xs`}>Ready-to-use links for fans and referrals.</p>
+                    </div>
+                    <div className={`text-[11px] px-3 py-1 rounded-full ${pill}`}>High-trust links</div>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <div className={`${labelTone} text-sm`}>Chat link</div>
+                      <div className={`input break-all ${inputTone}`}>{chatLink}</div>
+                      <div className="flex gap-2">
+                        <button
+                          className="btn w-full"
+                          onClick={() => {
+                            navigator.clipboard.writeText(chatLink);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 1600);
+                            showToast('Chat link copied');
+                          }}
+                        >
+                          Copy chat link
+                        </button>
+                        <Link
+                          href="/logo-ror-glass.svg"
+                          className={`px-4 py-2 rounded-2xl text-sm text-center border ${isPearl ? 'border-black/10 hover:bg-black/5' : 'border-white/20 hover:bg-white/10'}`}
+                        >
+                          Asset
+                        </Link>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className={`${labelTone} text-sm`}>Referral link</div>
+                      <div className={`input break-all ${inputTone}`}>{refLink || 'Generating your code...'}</div>
+                      <button
+                        className="btn w-full"
+                        onClick={() => {
+                          if (refLink) {
+                            navigator.clipboard.writeText(refLink);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 1600);
+                            showToast('Referral link copied');
+                            t('ref_share_click', { scope: 'creator_dashboard', props: { handle } });
+                          }
+                        }}
+                      >
+                        Copy referral link
+                      </button>
+                    </div>
+                  </div>
+                  {offers && offers.length > 0 && (
+                    <div className="pt-2 space-y-2">
+                      <div className="text-sm font-semibold">Offer invite links</div>
+                      <div className={`${mutedTone} text-xs`}>Each link opens chat with a preselected offer.</div>
+                      <div className="space-y-2">
+                        {offers.map((o, idx) => {
+                          const href = `${chatLink}?offer=${encodeURIComponent(o.id || idx)}`;
+                          return (
+                            <div
+                              key={o.id || idx}
+                              className={`flex flex-col gap-1 p-3 rounded-2xl border ${isPearl ? 'border-black/10 bg-black/5' : 'border-white/10 bg-white/5'}`}
+                            >
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-sm font-semibold">
+                                  {o.title || 'Offer'} · EUR {Number(o.price || 0).toFixed(2)}
+                                </span>
+                                <button
+                                  className={`px-3 py-1 rounded-full text-[11px] ${isPearl ? 'bg-black text-white' : 'bg-white/10 text-white'}`}
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(href);
+                                    setCopied(true);
+                                    setTimeout(() => setCopied(false), 1600);
+                                  }}
+                                >
+                                  Copy
+                                </button>
+                              </div>
+                              <div className={`text-[12px] break-all ${hintTone}`}>{href}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-                <label className={`text-sm ${labelTone}`}>Avatar (upload)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={onAvatarFileSelected}
-                  className={`text-xs ${hintTone}`}
-                />
-                {savingAvatar && <div className={`text-[11px] ${hintTone}`}>Uploading...</div>}
-                {avatarDataUrl ? (
-                  <img src={avatarDataUrl} alt="avatar" className="h-12 w-12 rounded-full object-cover" />
-                ) : (
-                  <div className={`text-[11px] ${hintTone}`}>No avatar yet. Upload a small image.</div>
-                )}
+              {/* RIGHT COLUMN */}
+              <aside className="space-y-6">
+                <div className={`${glass} p-5 rounded-3xl space-y-4`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Identity & ops</div>
+                      <p className={`${mutedTone} text-xs`}>How fans see you and how we reach you.</p>
+                    </div>
+                    <div className={`text-[11px] px-3 py-1 rounded-full ${pill}`}>Public card</div>
+                  </div>
 
-                <div className={`h-px ${dividerTone}`} />
-
-                <div className="font-semibold text-lg">Chat settings</div>
-                <label className={`text-sm ${labelTone}`}>Price (EUR / USDC equiv.)</label>
-                <input
-                  className={`input ${inputTone}`}
-                  type="number"
-                  min={1}
-                  value={price}
-                  onChange={(e) => setPrice(Number(e.target.value))}
-                />
-
-                <label className={`text-sm ${labelTone}`}>Reply window (hours)</label>
-                <input
-                  className={`input ${inputTone}`}
-                  type="number"
-                  min={1}
-                  value={replyWindowHours}
-                  onChange={(e) => setReplyWindowHours(Number(e.target.value))}
-                />
-
-                <label className={`text-sm ${labelTone}`}>Fast Lane price (optional)</label>
-                <input
-                  className={`input ${inputTone}`}
-                  type="number"
-                  min={1}
-                  value={fastPrice ?? ''}
-                  onChange={(e) => setFastPrice(e.target.value === '' ? null : Number(e.target.value))}
-                  placeholder="e.g. 1.5x your normal price"
-                />
-
-                <label className={`text-sm ${labelTone}`}>Fast Lane reply window (hours, optional)</label>
-                <input
-                  className={`input ${inputTone}`}
-                  type="number"
-                  min={1}
-                  value={fastReplyWindow ?? ''}
-                  onChange={(e) => setFastReplyWindow(e.target.value === '' ? null : Number(e.target.value))}
-                  placeholder="e.g. 12"
-                />
-
-                <div className={`h-px ${dividerTone}`} />
-                <div className="font-semibold text-lg">Custom offers (up to 2)</div>
-                {[0, 1].map((i) => {
-                  const o = offers[i] || { title: '', price: '', replyWindowHours: '', description: '' };
-                  return (
-                    <div
-                      key={i}
-                      className={`space-y-2 p-3 rounded-2xl ${
-                        isPearl ? 'bg-black/5 border border-black/10' : 'bg-white/5 border border-white/10'
-                      }`}
-                    >
-                      <label className={`text-sm ${labelTone}`}>Title</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className={`text-sm ${labelTone}`}>Display name</label>
                       <input
                         className={`input ${inputTone}`}
-                        value={o.title}
-                        placeholder="e.g. Deep dive"
-                        onChange={(e) => {
-                          const next = [...offers];
-                          next[i] = { ...o, title: e.target.value };
-                          setOffers(next);
-                        }}
+                        placeholder="Your public name"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
                       />
-                      <label className={`text-sm ${labelTone}`}>Price (EUR)</label>
+                    </div>
+                    <div className="space-y-1">
+                      <label className={`text-sm ${labelTone}`}>Email (ops/payout contact)</label>
+                      <input
+                        className={`input ${inputTone}`}
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className={`h-px ${dividerTone}`} />
+
+                  <div className="flex items-start gap-3">
+                    <div className="space-y-2 flex-1">
+                      <label className={`text-sm ${labelTone}`}>Avatar (upload)</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={onAvatarFileSelected}
+                        className="text-xs"
+                      />
+                      {savingAvatar && <div className={`text-[11px] ${hintTone}`}>Uploading...</div>}
+                      {avatarDataUrl ? (
+                        <div className="flex items-center gap-2">
+                          <img src={avatarDataUrl} alt="avatar" className="h-12 w-12 rounded-full object-cover" />
+                          <div className={`text-[12px] ${mutedTone}`}>Looks good in chat + dashboard</div>
+                        </div>
+                      ) : (
+                        <div className={`text-[11px] ${hintTone}`}>No avatar yet. Upload a small image (&lt;1MB).</div>
+                      )}
+                    </div>
+                    <div className="shrink-0">
+                      <div className="text-xs font-semibold mb-2">Status</div>
+                      <div className="flex flex-col gap-2">
+                        <span className={`px-3 py-1 rounded-full text-[11px] ${pill}`}>
+                          Session: {authorized ? 'Active' : 'Not signed'}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-[11px] ${pill}`}>
+                          Email: {email ? 'On file' : 'Missing'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`${glass} p-5 rounded-3xl space-y-3`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Pricing & SLA</div>
+                      <p className={`${mutedTone} text-xs`}>Tune speed vs. earnings.</p>
+                    </div>
+                    <div className={`text-[11px] px-3 py-1 rounded-full ${pill}`}>Escrow tied</div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className={`text-sm ${labelTone}`}>Price (EUR / USDC equiv.)</label>
                       <input
                         className={`input ${inputTone}`}
                         type="number"
                         min={1}
-                        value={o.price}
-                        onChange={(e) => {
-                          const next = [...offers];
-                          next[i] = { ...o, price: Number(e.target.value) };
-                          setOffers(next);
-                        }}
+                        value={price}
+                        onChange={(e) => setPrice(Number(e.target.value))}
                       />
+                    </div>
+                    <div className="space-y-1">
                       <label className={`text-sm ${labelTone}`}>Reply window (hours)</label>
                       <input
                         className={`input ${inputTone}`}
                         type="number"
                         min={1}
-                        value={o.replyWindowHours}
-                        onChange={(e) => {
-                          const next = [...offers];
-                          next[i] = { ...o, replyWindowHours: Number(e.target.value) };
-                          setOffers(next);
-                        }}
-                      />
-                      <label className={`text-sm ${labelTone}`}>Description</label>
-                      <textarea
-                        className={`w-full rounded-xl px-3 py-2 text-sm ${textareaTone}`}
-                        value={o.description}
-                        onChange={(e) => {
-                          const next = [...offers];
-                          next[i] = { ...o, description: e.target.value };
-                          setOffers(next);
-                        }}
+                        value={replyWindowHours}
+                        onChange={(e) => setReplyWindowHours(Number(e.target.value))}
                       />
                     </div>
-                  );
-                })}
-
-                <button className="btn w-full" onClick={() => saveSettings()}>
-                  {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Save'}
-                </button>
-                {saveStatus === 'saved' && (
-                  <div className="text-[11px] text-emerald-200 text-center">Saved</div>
-                )}
-                {saveStatus === 'error' && (
-                  <div className="text-[11px] text-red-300 text-center">Save failed</div>
-                )}
-              </div>
-
-              {/* Referral earnings */}
-              <div className={`${surface} p-4 space-y-3 rounded-2xl`}>
-                <div className="font-semibold text-lg">Referral earnings</div>
-                <div className={`text-sm ${hintTone}`}>
-                  Earn from creators who onboard with your code.
+                    <div className="space-y-1">
+                      <label className={`text-sm ${labelTone}`}>Fast Lane price (optional)</label>
+                      <input
+                        className={`input ${inputTone}`}
+                        type="number"
+                        min={1}
+                        value={fastPrice ?? ''}
+                        onChange={(e) => setFastPrice(e.target.value === '' ? null : Number(e.target.value))}
+                        placeholder="e.g. 1.5x your normal price"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className={`text-sm ${labelTone}`}>Fast Lane reply window (hours)</label>
+                      <input
+                        className={`input ${inputTone}`}
+                        type="number"
+                        min={1}
+                        value={fastReplyWindow ?? ''}
+                        onChange={(e) => setFastReplyWindow(e.target.value === '' ? null : Number(e.target.value))}
+                        placeholder="e.g. 12"
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-1">
+                    <button className="btn w-full" onClick={() => saveSettings()}>
+                      {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Save pricing'}
+                    </button>
+                    {saveStatus === 'saved' && (
+                      <div className="text-[11px] text-emerald-600 text-center mt-2">Saved</div>
+                    )}
+                    {saveStatus === 'error' && (
+                      <div className="text-[11px] text-red-500 text-center mt-2">Save failed</div>
+                    )}
+                  </div>
                 </div>
-                <div
-                  className={`p-3 rounded-2xl ${
-                    isPearl ? 'bg-black/5 border border-black/10' : 'bg-white/5 border border-white/10'
-                  }`}
-                >
-                  <div className={`text-xs ${hintTone}`}>Creators referred</div>
-                  <div className="text-xl font-semibold">
-                    {refStatsLoading ? '...' : refStats?.creatorsCount ?? 0}
-                  </div>
-                  <div className={`text-xs mt-1 ${hintTone}`}>
-                    Earned (answered): EUR {refStatsLoading ? '...' : (refStats?.totals?.revenueAnswered ?? 0).toFixed(2)}
-                  </div>
-                </div>
-                <Link
-                  href="/creator/join"
-                  className={`text-[12px] underline ${isPearl ? 'text-emerald-600' : 'text-emerald-200'}`}
-                >
-                  How referrals work
-                </Link>
-              </div>
 
-              {/* referral */}
-              <div className={`${surface} p-4 space-y-3 relative rounded-2xl`}>
-                <div className="font-semibold">Invite another creator</div>
-                <p className={`text-sm ${hintTone}`}>
-                  Share this link. Other creators will start onboarding with your referral code.
-                </p>
-                <div className={`input break-all ${inputTone}`}>{refLink || 'Loading...'}</div>
-                <button
-                  className="btn w-full"
-                  onClick={() => {
-                    if (refLink) {
-                      navigator.clipboard.writeText(refLink);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1600);
-                      t('ref_share_click', { scope: 'creator_dashboard', props: { handle } });
-                    }
-                  }}
-                >
-                  Copy link
-                </button>
-                {copied && (
-                  <div
-                    className={`absolute -top-2 right-3 text-[11px] px-2 py-1 rounded-md shadow ${
-                      isPearl ? 'bg-black text-white' : 'bg-white text-black'
-                    }`}
-                  >
-                    Copied
+                <div className={`${glass} p-5 rounded-3xl space-y-3`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Custom offers (up to 2)</div>
+                      <p className={`${mutedTone} text-xs`}>Set themed responses like deep dives or audio replies.</p>
+                    </div>
+                    <div className={`text-[11px] px-3 py-1 rounded-full ${pill}`}>Optional</div>
                   </div>
-                )}
-              </div>
-
-              {/* Share kit */}
-              <div className={`${surface} p-4 space-y-3 rounded-2xl`}>
-                <div className="font-semibold">Share your chat</div>
-                <div className={`text-sm ${hintTone}`}>Copy your chat link or use the asset for socials.</div>
-                <div className={`input break-all ${inputTone}`}>{chatLink}</div>
-                <button
-                  className="btn w-full"
-                  onClick={() => {
-                    navigator.clipboard.writeText(chatLink);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1600);
-                  }}
-                >
-                  Copy chat link
-                </button>
-                <Link
-                  href="/logo-ror-glass.svg"
-                  className={`text-[12px] underline ${isPearl ? 'text-emerald-600' : 'text-emerald-200'}`}
-                >
-                  Download share asset
-                </Link>
-                {offers && offers.length > 0 && (
-                  <div className="pt-2 space-y-2">
-                    <div className="text-sm font-semibold">Offer invite links</div>
-                    {offers.map((o, idx) => {
-                      const href = `${chatLink}?offer=${encodeURIComponent(o.id || idx)}`;
-                      return (
-                        <div
-                          key={o.id || idx}
-                          className={`text-[12px] space-y-1 ${isPearl ? 'text-black/70' : 'text-white/70'}`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>
-                              {o.title || 'Offer'} - EUR {Number(o.price || 0).toFixed(2)}
-                            </span>
-                            <button
-                              className={`px-2 py-1 rounded-lg text-[11px] ${
-                                isPearl ? 'bg-black text-white' : 'bg-white/10 text-white'
-                              }`}
-                              onClick={() => {
-                                navigator.clipboard.writeText(href);
-                                setCopied(true);
-                                setTimeout(() => setCopied(false), 1600);
+                  {[0, 1].map((i) => {
+                    const o = offers[i] || { title: '', price: '', replyWindowHours: '', description: '' };
+                    return (
+                      <div
+                        key={i}
+                        className={`space-y-2 p-4 rounded-2xl border ${isPearl ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'}`}
+                      >
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className={`text-sm ${labelTone}`}>Title</label>
+                            <input
+                              className={`input ${inputTone}`}
+                              value={o.title}
+                              placeholder="e.g. Deep dive"
+                              onChange={(e) => {
+                                const next = [...offers];
+                                next[i] = { ...o, title: e.target.value };
+                                setOffers(next);
                               }}
-                            >
-                              Copy
-                            </button>
+                            />
                           </div>
-                          <div className={`break-all ${hintTone}`}>{href}</div>
+                          <div className="space-y-1">
+                            <label className={`text-sm ${labelTone}`}>Price (EUR)</label>
+                            <input
+                              className={`input ${inputTone}`}
+                              type="number"
+                              min={1}
+                              value={o.price}
+                              onChange={(e) => {
+                                const next = [...offers];
+                                next[i] = { ...o, price: Number(e.target.value) };
+                                setOffers(next);
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className={`text-sm ${labelTone}`}>Reply window (hours)</label>
+                            <input
+                              className={`input ${inputTone}`}
+                              type="number"
+                              min={1}
+                              value={o.replyWindowHours}
+                              onChange={(e) => {
+                                const next = [...offers];
+                                next[i] = { ...o, replyWindowHours: Number(e.target.value) };
+                                setOffers(next);
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className={`text-sm ${labelTone}`}>Description</label>
+                            <textarea
+                              className={`w-full rounded-xl px-3 py-2 text-sm ${textareaTone}`}
+                              value={o.description}
+                              onChange={(e) => {
+                                const next = [...offers];
+                                next[i] = { ...o, description: e.target.value };
+                                setOffers(next);
+                              }}
+                            />
+                          </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    );
+                  })}
+                  <button className="btn w-full" onClick={() => saveSettings()}>
+                    Save offers
+                  </button>
+                </div>
+
+                <div className={`${glass} p-5 rounded-3xl space-y-4`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Referral earnings</div>
+                      <p className={`${mutedTone} text-xs`}>Earn from creators who onboard with your code.</p>
+                    </div>
+                    <div className={`text-[11px] px-3 py-1 rounded-full ${pill}`}>Passive</div>
                   </div>
-                )}
-              </div>
-            </aside>
+                  <div
+                    className={`p-4 rounded-2xl border ${isPearl ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'}`}
+                  >
+                    <div className={`text-xs ${hintTone}`}>Creators referred</div>
+                    <div className="text-2xl font-semibold mt-1">
+                      {refStatsLoading ? '...' : refStats?.creatorsCount ?? 0}
+                    </div>
+                    <div className={`text-xs mt-1 ${hintTone}`}>
+                      Earned (answered): EUR {refStatsLoading ? '...' : (refStats?.totals?.revenueAnswered ?? 0).toFixed(2)}
+                    </div>
+                  </div>
+                  <Link
+                    href="/creator/join"
+                    className={`text-[12px] underline ${isPearl ? 'text-emerald-600' : 'text-emerald-200'}`}
+                  >
+                    How referrals work
+                  </Link>
+                </div>
+              </aside>
+            </section>
           </main>
         </>
       )}
       {toast && (
-        <div className="fixed bottom-4 right-4 px-4 py-2 rounded-xl bg-white text-black text-sm shadow-lg border border-black/5">
+        <div
+          className={`fixed bottom-4 right-4 px-4 py-2 rounded-xl text-sm shadow-lg border ${isPearl ? 'bg-slate-900 text-white border-black/5' : 'bg-white text-black border-black/5'}`}
+        >
           {toast}
         </div>
       )}
@@ -759,15 +872,16 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   );
 }
 
-function Stat({ label, value, isPearl }: { label: string; value: number; isPearl?: boolean }) {
+function Stat({ label, value, isPearl }: { label: string; value: number | string; isPearl?: boolean }) {
   return (
     <div
-      className={`p-3 rounded-xl text-center ${
-        isPearl ? 'bg-black/5 text-black border border-black/10' : 'bg-white/5 text-white'
+      className={`p-4 rounded-2xl border text-left ${
+        isPearl ? 'bg-white/90 border-black/5 shadow-sm' : 'bg-white/5 border-white/10'
       }`}
     >
-      <div className="text-2xl font-bold">{value}</div>
-      <div className={`${isPearl ? 'text-black/50' : 'text-white/40'} text-xs`}>{label}</div>
+      <div className="text-xs uppercase tracking-[0.12em] text-emerald-400">Live</div>
+      <div className="text-xl font-bold mt-1">{value}</div>
+      <div className={`${isPearl ? 'text-slate-600' : 'text-white/60'} text-xs mt-1`}>{label}</div>
     </div>
   );
 }
@@ -792,16 +906,18 @@ function Tabs({
             key={tItem.key}
             onClick={() => setActive(tItem.key)}
             className={
-              'px-3 py-1 rounded-full text-sm border ' +
-              (active === tItem.key ? 'bg-white text-black border-transparent' : 'border-white/20')
+              'px-4 py-2 rounded-full text-sm border transition ' +
+              (active === tItem.key
+                ? 'bg-white text-black border-transparent shadow'
+                : 'border-white/20 text-white/70 hover:border-white/40')
             }
           >
-            {tItem.label}
+            {tItem.label} ({tItem.items?.length || 0})
           </button>
         ))}
       </div>
       <div className="space-y-2">
-        {items.length ? items.map(renderItem) : <div className="text-white/40 text-sm">Nothing here.</div>}
+        {items.length ? items.map(renderItem) : <div className="text-white/60 text-sm">Nothing here.</div>}
       </div>
     </div>
   );
@@ -889,20 +1005,4 @@ function VerificationForm({ handle, onVerified }: { handle: string; onVerified: 
 export async function getServerSideProps(ctx: any) {
   return { props: { handle: ctx.params.handle } };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
