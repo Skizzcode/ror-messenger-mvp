@@ -33,6 +33,7 @@ export default function ChatPage({ handle }: { handle: string }) {
   const [discountPercent, setDiscountPercent] = useState<number | null>(null);
   const [tipAmount, setTipAmount] = useState<number>(5);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
   // slug used when creating a new thread (chat launched via /c/{creatorHandle})
   const creatorHandle = handle;
@@ -77,6 +78,12 @@ export default function ChatPage({ handle }: { handle: string }) {
   const wallet = useWallet();
   const isConnected = !!wallet.publicKey;
   const walletPk = wallet.publicKey?.toBase58() || null;
+
+  // Live ticking countdown for SLA
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Role: auto-detect
   const autoRole: 'fan' | 'creator' = useMemo(() => {
@@ -143,13 +150,14 @@ export default function ChatPage({ handle }: { handle: string }) {
   }, [thread, role, wallet.publicKey, mounted]);
 
   // Countdown
-  const timeLeft = useMemo(() => {
-    if (!mounted || !thread) return null;
-    const ms = Math.max(0, thread.deadline - Date.now());
-    const h = Math.floor(ms / 3600000);
-    const m = Math.floor((ms % 3600000) / 60000);
-    return `${h}h ${m}m`;
-  }, [thread, mounted, data]);
+  const countdown = useMemo(() => {
+    if (!thread || !thread.deadline) return null;
+    const ms = Math.max(0, thread.deadline - nowMs);
+    const h = String(Math.floor(ms / 3600000)).padStart(2, '0');
+    const m = String(Math.floor((ms % 3600000) / 60000)).padStart(2, '0');
+    const s = String(Math.floor((ms % 60000) / 1000)).padStart(2, '0');
+    return { text: `${h}:${m}:${s}`, ms };
+  }, [thread, nowMs]);
 
   const offers = creatorProfile?.offers || [];
   const standardPrice = creatorProfile?.price ?? 20;
@@ -246,10 +254,10 @@ export default function ChatPage({ handle }: { handle: string }) {
   const statusLabel = !thread
     ? 'Awaiting checkout'
     : thread.status === 'answered'
-    ? 'Answered · escrow released'
+    ? 'Answered - escrow released'
     : thread.status === 'refunded'
     ? 'Refunded'
-    : 'Open · escrowed';
+    : 'Open - escrowed';
 
   return (
     <div className={`min-h-screen relative overflow-hidden ${shell}`}>
@@ -299,26 +307,19 @@ export default function ChatPage({ handle }: { handle: string }) {
                   <div className="text-sm text-white/80">
                     Guaranteed reply in {standardWindow}h or auto-refund. Escrow holds funds until creator replies.
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.12em]">
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.12em]">
                     <span className={`${pill} ${pillStatus}`}>{statusLabel}</span>
-                    {timeLeft && <span className={`${pill} ${pillTime}`}>Time left {timeLeft}</span>}
+                    {countdown && thread && (
+                      <span className={`${pill} ${pillTime}`}>
+                        {thread.status === 'answered' ? 'Escrow released' : `Time left ${countdown.text}`}
+                      </span>
+                    )}
                     <span className={`${pill} ${pillAccent}`}>{standardWindow}h SLA</span>
-                    <span className={`${pill} bg-white/10 border-white/20 text-white/85`}>Flow: Paid → Escrow → Reply → Release/Refund</span>
                     {discountActive && (
                       <span className={`${pill} bg-emerald-400/20 border-emerald-300/40 text-emerald-50`}>
                         Launch promo: {discountPercent}% off
                       </span>
                     )}
-                    {creatorProfile?.answerRate !== null && creatorProfile?.answerRate !== undefined && (
-                      <span className={`${pill} bg-emerald-300/20 border-emerald-200/40 text-emerald-50`}>
-                        Answers {(creatorProfile.answerRate * 100).toFixed(0)}%
-                      </span>
-                    )}
-                    {creatorProfile?.avgReplyMs ? (
-                      <span className={`${pill} bg-blue-400/20 border-blue-300/35 text-blue-50`}>
-                        Avg reply {formatMs(creatorProfile.avgReplyMs)}
-                      </span>
-                    ) : null}
                     {mounted && lastTx && (
                       <span className={`${pill} ${pillNeutral}`}>Escrow {lastTx.slice(0, 8)}...</span>
                     )}
@@ -364,13 +365,16 @@ export default function ChatPage({ handle }: { handle: string }) {
               <div className="px-5 py-4 flex flex-wrap items-center justify-between gap-3 border-b border-white/10">
                 <div className="flex items-center gap-2 flex-wrap text-[12px] text-white/80">
                   <span className={`${pill} ${pillStatus}`}>{statusLabel}</span>
-                  {timeLeft && <span className={`${pill} ${pillTime}`}>Time left {timeLeft}</span>}
+                  {countdown && thread && (
+                    <span className={`${pill} ${pillTime}`}>
+                      {thread.status === 'answered' ? 'Escrow released' : `Time left ${countdown.text}`}
+                    </span>
+                  )}
                   {role === 'fan' && !creatorHasReplied && (
                     <span className={`${pill} bg-indigo-400/20 border-indigo-300/35 text-indigo-50`}>
                       Pre-reply cap {fanPreCount}/{FAN_PRE_REPLY_LIMIT}
                     </span>
                   )}
-                  <span className={`${pill} bg-white/10 border-white/20 text-white/85`}>Flow: Paid → Escrow → Reply → Release/Refund</span>
                   {discountActive && (
                     <span className={`${pill} bg-emerald-400/20 border-emerald-300/40 text-emerald-50`}>
                       Launch promo: {discountPercent}% off

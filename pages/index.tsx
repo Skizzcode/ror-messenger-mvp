@@ -22,11 +22,28 @@ export default function Home({ refCode }: HomeProps) {
     avatarDataUrl: string | null;
   }>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [heroPrice, setHeroPrice] = useState<number>(20);
+  const [heroHandle, setHeroHandle] = useState<string>('creator');
+  const [heroSlaHours, setHeroSlaHours] = useState<number>(48);
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     t('page_view', { scope: 'public_home' });
   }, []);
+
+  // Persist theme preference across reloads
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem('ror_theme');
+    if (stored === 'dark' || stored === 'light') {
+      setTheme(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || typeof window === 'undefined') return;
+    window.localStorage.setItem('ror_theme', theme);
+  }, [theme, mounted]);
 
   useEffect(() => {
     let stop = false;
@@ -65,6 +82,29 @@ export default function Home({ refCode }: HomeProps) {
       stop = true;
     };
   }, [wallet.publicKey]);
+
+  // Pull the creator's public price to display on the hero card
+  useEffect(() => {
+    const h = myCreator?.handle;
+    if (!h) {
+      setHeroHandle('creator');
+      setHeroPrice(20);
+      setHeroSlaHours(48);
+      return;
+    }
+    setHeroHandle(h);
+    fetch(`/api/thread?id=${encodeURIComponent(h)}`)
+      .then((r) => r.json())
+      .then((j) => {
+        const p = j?.creatorProfile?.price;
+        const sla = j?.creatorProfile?.replyWindowHours;
+        if (typeof p === 'number' && p > 0) setHeroPrice(p);
+        if (typeof sla === 'number' && sla > 0) setHeroSlaHours(sla);
+      })
+      .catch(() => {
+        // keep defaults
+      });
+  }, [myCreator?.handle]);
 
   const chatDemoUrl = '/c/creator-demo';
   const joinUrl = refCode ? `/creator/join?ref=${encodeURIComponent(refCode)}` : '/creator/join';
@@ -135,15 +175,15 @@ export default function Home({ refCode }: HomeProps) {
           <div className="max-w-6xl mx-auto px-4 py-14 grid gap-10 lg:grid-cols-2 items-center relative z-10">
             <div className="space-y-7">
               <span className={`${chipBase} ${isLight ? 'bg-white/80 border-black/5 text-slate-700' : 'bg-white/10 border-white/20 text-white/85'}`}>
-                Paid DMs with guaranteed replies
+                Pay to DM · reply or refund
               </span>
 
               <h1 className="text-4xl md:text-5xl font-black leading-tight tracking-tight">
-                Premium lane for creator DMs.
+                Guaranteed DMs with escrow protection.
               </h1>
 
               <p className={`${subtext} text-base max-w-xl`}>
-                Set a price and a reply window. Escrow holds funds until you reply; miss it and it auto-refunds. Fans see the SLA upfront.
+                Fans pay once, your timer starts. Funds sit in escrow until you answer; miss the window and it auto-refunds. Simple, upfront, and trustable for both sides.
               </p>
 
               <div className="flex flex-wrap gap-3">
@@ -214,11 +254,15 @@ export default function Home({ refCode }: HomeProps) {
                 <div className="flex items-center gap-3">
                   <img src="/logo-ror-glass.svg" alt="RoR" className="h-12 w-12 rounded-3xl" />
                   <div>
-                    <div className="text-sm font-semibold">Chat with @creator</div>
-                    <div className={`${subtext} text-[11px]`}>43m left - escrow locked</div>
+                    <div className="text-sm font-semibold">Chat with @{heroHandle}</div>
+                    <div className={`${subtext} text-[11px]`}>
+                      {`${String(Math.max(0, heroSlaHours)).padStart(2, '0')}:00:00`} · escrow locked
+                    </div>
                   </div>
                 </div>
-                <span className={`${chipBase} ${isLight ? 'bg-white border-black/5 text-slate-800' : 'bg-white/10 border-white/20 text-white/85'}`}>EUR 20</span>
+                <span className={`${chipBase} ${isLight ? 'bg-white border-black/5 text-slate-800' : 'bg-white/10 border-white/20 text-white/85'}`}>
+                  EUR {heroPrice.toFixed(2)}
+                </span>
               </div>
               <div className="relative space-y-2 text-sm">
                 <div className={`${isLight ? 'bg-white text-black' : 'bg-white text-black'} rounded-2xl rounded-bl-md px-3 py-2 shadow-sm max-w-[78%]`}>
