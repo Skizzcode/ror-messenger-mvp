@@ -957,7 +957,15 @@ export default function CreatorDashboard({ handle }: { handle: string }) {
   );
 }
 
-function Stat({ label, value, isPearl }: { label: string; value: number | string; isPearl?: boolean }) {
+function Stat({
+  label,
+  value,
+  isPearl,
+}: {
+  label: string;
+  value: number | string | ReactNode;
+  isPearl?: boolean;
+}) {
   return (
     <div
       className={`p-4 rounded-2xl border text-left ${
