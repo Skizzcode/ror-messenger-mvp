@@ -142,7 +142,9 @@ export default function Home({ refCode }: HomeProps) {
                 Premium lane for creator DMs.
               </h1>
 
-              <p className={`${subtext} text-base max-w-xl`}>Set a price and a reply window. Every chat is escrowed. Reply in time to unlock earnings; miss it and it auto-refunds. Fans see the SLA upfront.</p>
+              <p className={`${subtext} text-base max-w-xl`}>
+                Set a price and a reply window. Escrow holds funds until you reply; miss it and it auto-refunds. Fans see the SLA upfront.
+              </p>
 
               <div className="flex flex-wrap gap-3">
                 {!mounted || !wallet.publicKey || !myCreator?.handle ? (
@@ -190,7 +192,7 @@ export default function Home({ refCode }: HomeProps) {
 
               {mounted && wallet.publicKey && !myCreator?.handle && (
                 <div className={`text-[11px] ${subtext}`}>
-                  {checking ? 'Checking your wallet…' : (
+                  {checking ? 'Checking your wallet...' : (
                     <>
                       No creator inbox bound to this wallet.{' '}
                       <Link
@@ -213,19 +215,19 @@ export default function Home({ refCode }: HomeProps) {
                   <img src="/logo-ror-glass.svg" alt="RoR" className="h-12 w-12 rounded-3xl" />
                   <div>
                     <div className="text-sm font-semibold">Chat with @creator</div>
-                    <div className={`${subtext} text-[11px]`}>43m left · escrow locked</div>
+                    <div className={`${subtext} text-[11px]`}>43m left - escrow locked</div>
                   </div>
                 </div>
-                <span className={`${chipBase} ${isLight ? 'bg-white border-black/5 text-slate-800' : 'bg-white/10 border-white/20 text-white/85'}`}>€20</span>
+                <span className={`${chipBase} ${isLight ? 'bg-white border-black/5 text-slate-800' : 'bg-white/10 border-white/20 text-white/85'}`}>EUR 20</span>
               </div>
               <div className="relative space-y-2 text-sm">
                 <div className={`${isLight ? 'bg-white text-black' : 'bg-white text-black'} rounded-2xl rounded-bl-md px-3 py-2 shadow-sm max-w-[78%]`}>
                   Hey, quick question about your drop
                 </div>
                 <div className={`${isLight ? 'bg-[#0f172a]/5 text-[#0b1420]' : 'bg-[#0f172a]/90 text-white border border-white/10'} rounded-2xl rounded-br-md px-3 py-2 ml-auto shadow-sm max-w-[78%]`}>
-                  Thanks for reaching out — what do you want to know exactly?
+                  Thanks for reaching out - what do you want to know exactly?
                 </div>
-                <div className={`${subtext} text-[11px] mt-3`}>Flow: Paid ? Escrow ? Reply ? Release/Refund</div>
+                <div className={`${subtext} text-[11px] mt-3`}>Flow: Paid â†’ Escrow â†’ Reply â†’ Release/Refund</div>
               </div>
               <div className="pt-3 mt-2 border-t border-white/10 grid gap-2 md:grid-cols-2">
                 <MiniCard title="No spam" text="Every DM is paid, signal over noise." isLight={isLight} />
@@ -262,7 +264,7 @@ export default function Home({ refCode }: HomeProps) {
             />
             <FeatureCard
               step="3"
-              title="Reply ? unlock"
+              title="Reply to unlock"
               text="Your reply releases funds. Miss the timer? Auto-refund triggers." isLight={isLight}
             />
           </div>
@@ -317,7 +319,7 @@ export default function Home({ refCode }: HomeProps) {
       {/* FOOTER */}
       <footer className={`w-full border-t ${isLight ? 'border-black/5' : 'border-white/10'}`}>
         <div className={`max-w-6xl mx-auto px-4 py-6 flex flex-wrap gap-4 items-center justify-between text-xs ${subtext}`}>
-          <div>© {new Date().getFullYear()} Reply or Refund — Built in Germany.</div>
+          <div>(c) {new Date().getFullYear()} Reply or Refund â€” Built in Germany.</div>
           <nav className="flex items-center gap-4">
             <Link className="hover:opacity-80" href="/imprint">Imprint</Link>
             <Link className="hover:opacity-80" href="/privacy">Privacy</Link>
